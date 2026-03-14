@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
@@ -16,6 +18,23 @@ def _safe_list(value: Any) -> List[Any]:
     if isinstance(value, list):
         return value
     return []
+
+
+def _try_extract_json(raw: str) -> Dict[str, Any]:
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except Exception:
+        pass
+
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except Exception:
+            pass
+
+    return {"error": "invalid_json", "raw": raw}
 
 
 def generate_hazop_from_text(
@@ -53,6 +72,9 @@ Requisitos:
         context_blocks=None,
         reasoning=True,
     )
+
+    if isinstance(result, dict) and result.get("error") == "invalid_json":
+        result = _try_extract_json(result.get("raw", ""))
 
     raw_items = []
     if isinstance(result, dict):
@@ -124,6 +146,9 @@ Regras:
         context_blocks=context_blocks,
         reasoning=False,
     )
+
+    if isinstance(result, dict) and result.get("error") == "invalid_json":
+        result = _try_extract_json(result.get("raw", ""))
 
     if not isinstance(result, dict):
         return {
