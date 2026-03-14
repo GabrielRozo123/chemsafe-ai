@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ case_name }} — ChemSafe Pro AI Report</title>
+  <style>
+    :root {
+      --navy: #0f2747;
+      --blue: #1d4ed8;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #dbe4f0;
+      --bg: #f8fbff;
+      --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, Arial, Helvetica, sans-serif; color: var(--ink); background: var(--bg); }
+    .page { max-width: 1080px; margin: 0 auto; padding: 28px; }
+    .hero { background: linear-gradient(135deg, #0f2747 0%, #17396a 55%, #0f2747 100%); color: white; border-radius: 24px; padding: 28px 32px; box-shadow: 0 18px 50px rgba(15,39,71,0.18); }
+    .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .18em; opacity: .75; }
+    h1 { margin: 8px 0 10px; font-size: 34px; }
+    .sub { color: #dceaff; max-width: 760px; line-height: 1.55; }
+    .meta { margin-top: 18px; display: flex; gap: 16px; flex-wrap: wrap; }
+    .meta div { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 8px 14px; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 22px; margin-top: 22px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; box-shadow: 0 10px 32px rgba(2,8,23,0.05); }
+    .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .16em; color: var(--blue); margin-bottom: 12px; }
+    .rich-text h1, .rich-text h2, .rich-text h3 { color: var(--navy); }
+    .rich-text p, .rich-text li { line-height: 1.7; }
+    .pre { white-space: pre-wrap; background: #f8fafc; border: 1px solid var(--line); border-radius: 14px; padding: 16px; font-size: 13px; color: #334155; }
+    .footer { margin-top: 22px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="eyebrow">ChemSafe Pro AI · Technical screening report</div>
+      <h1>{{ case_name }}</h1>
+      <div class="sub">Relatório preliminar gerado para apoiar triagem de segurança de processo, documentação técnica, discussão de HAZOP/LOPA e screening de cenários de consequência.</div>
+      <div class="meta">
+        <div>Gerado em {{ generated_at }}</div>
+        <div>Arquitetura híbrida: motor determinístico + copiloto IA</div>
+        <div>Uso: screening / pré-estudo</div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <div class="section-title">Narrativa técnica</div>
+        <div class="rich-text">{{ narrative_html | safe }}</div>
+      </article>
+      <aside class="card">
+        <div class="section-title">Payload estruturado</div>
+        <div class="pre">{{ json_payload }}</div>
+      </aside>
+    </section>
+
+    <section class="card" style="margin-top:22px;">
+      <div class="section-title">Aviso importante</div>
+      <p>Este documento é uma ferramenta de triagem e apoio à decisão. Não substitui estudo formal de PHA, verificação detalhada de SIS, relatório regulatório ou validação por profissional habilitado.</p>
+    </section>
+
+    <div class="footer">ChemSafe Pro AI · Engenharia de processo, segurança de processo e documentação auditável.</div>
+  </div>
+</body>
+</html>
