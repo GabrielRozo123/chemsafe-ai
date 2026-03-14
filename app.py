@@ -84,7 +84,7 @@ with st.sidebar:
     st.markdown("---")
     st.write("**Acesso rápido**")
     for key, value in DB.items():
-        if st.button(value["nome"], key=f"quick_{key}", use_container_width=True):
+        if st.button(value["nome"], key=f"quick_{key}", width="stretch"):
             st.session_state.selected_compound = value
     st.markdown("---")
     st.write("**Memória da sessão**")
@@ -124,7 +124,7 @@ with overview:
         unsafe_allow_html=True,
     )
     c4.markdown(
-        metric_card("Último caso", st.session_state.get("last_case_name", "untitled")),
+        metric_card("Último caso", st.session_state.get("last_case_name", "untitled_case")),
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -147,7 +147,7 @@ with chemicals_tab:
     with left:
         q = st.text_input("Pesquisar composto", placeholder="Ex.: etanol, amônia, 64-17-5")
     with right:
-        find_btn = st.button("Consultar", type="primary", use_container_width=True)
+        find_btn = st.button("Consultar", type="primary", width="stretch")
     if find_btn and q:
         result = chemical_lookup(q)
         if result:
@@ -198,8 +198,10 @@ with hazop_tab:
     )
     parameter = c2.selectbox("Parâmetro", list(HAZOP_DB.keys()))
     guideword = c3.selectbox("Palavra-guia", ["MAIS", "MENOS", "NÃO / NENHUM"])
+
     if st.button("Gerar HAZOP base", type="primary"):
         st.session_state.hazop_result = hazop_template(parameter, guideword)
+
     hz = st.session_state.hazop_result
     if hz:
         st.subheader("Worksheet HAZOP base")
@@ -214,7 +216,7 @@ with hazop_tab:
                     "Recomendação": hz.get("rec", ["—"])[idx if idx < len(hz.get("rec", [])) else 0],
                 }
             )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     st.markdown("---")
     st.subheader("Pré-HAZOP por IA")
@@ -228,13 +230,22 @@ with hazop_tab:
         height=100,
         placeholder="Ex.: resfriamento por água industrial, atmosfera inerte, operação em batelada...",
     )
+
     if st.button("Gerar pré-HAZOP com IA", type="primary", disabled=not ai.enabled):
-        scenarios = generate_hazop_from_text(ai, process_description, equipment, operating_context)
-        st.session_state.risk_register = [s.__dict__ for s in scenarios]
-        st.session_state.last_case_name = equipment
+        with st.spinner("Consultando IA e estruturando cenários..."):
+            scenarios = generate_hazop_from_text(ai, process_description, equipment, operating_context)
+            st.session_state.risk_register = [s.__dict__ for s in scenarios]
+            st.session_state.last_case_name = equipment
+
+            if not scenarios:
+                st.warning(
+                    "A IA respondeu, mas nenhum cenário estruturado foi extraído. "
+                    "Preencha os dois campos e verifique o log de auditoria se isso persistir."
+                )
+
     if st.session_state.risk_register:
         st.subheader("Cenários gerados")
-        st.dataframe(pd.DataFrame(st.session_state.risk_register), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(st.session_state.risk_register), width="stretch", hide_index=True)
 
 with bowtie_tab:
     st.markdown(
@@ -292,6 +303,7 @@ with lopa_tab:
             options=[f"{n} (PFD={p})" for n, p in IPL_CATALOG],
             default=[f"{IPL_CATALOG[0][0]} (PFD={IPL_CATALOG[0][1]})"],
         )
+
     if st.button("Calcular LOPA / SIL", type="primary"):
         chosen = []
         for label in selected:
@@ -300,6 +312,7 @@ with lopa_tab:
                     chosen.append((name, pfd))
                     break
         st.session_state.lopa_result = compute_lopa(f_ie, criterion, chosen)
+
     if st.session_state.lopa_result:
         r = st.session_state.lopa_result
         a, b, c, d = st.columns(4)
@@ -323,7 +336,7 @@ with lopa_tab:
         )
         st.dataframe(
             pd.DataFrame(r["selected_ipls"], columns=["IPL", "PFD"]),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         st.markdown(
@@ -333,6 +346,7 @@ with lopa_tab:
 
 with consequence_tab:
     disp_tab, fire_tab, suggest_tab = st.tabs(["Dispersão gaussiana", "Pool fire", "Sugerir módulos"])
+
     with disp_tab:
         a, b, c = st.columns(3)
         q_g_s = a.number_input("Q (g/s)", value=10.0, min_value=0.001)
@@ -342,8 +356,10 @@ with consequence_tab:
         idlh_ppm = d1.number_input("IDLH (ppm)", value=300.0, min_value=0.001)
         mw = d2.number_input("PM do gás", value=17.0, min_value=1.0)
         h = d3.number_input("Altura da fonte (m)", value=0.0, min_value=0.0)
+
         if st.button("Rodar dispersão", type="primary"):
             st.session_state.dispersion_result = gaussian_dispersion(q_g_s, wind, stability, idlh_ppm, mw, h)
+
         if st.session_state.dispersion_result:
             r = st.session_state.dispersion_result
             x_display = f"{r['x_idlh']} m" if r["x_idlh"] else "> 3 km"
@@ -359,14 +375,17 @@ with consequence_tab:
             u2.markdown(metric_card("Concentração @100 m", f"{r['c_at_100m']:.4f} g/m³"), unsafe_allow_html=True)
             df = pd.DataFrame({"x_m": r["xs"], "c_g_m3": r["cs"]})
             st.line_chart(df.set_index("x_m"))
+
     with fire_tab:
         a, b, c, d = st.columns(4)
         diameter = a.number_input("Diâmetro da poça (m)", value=5.0, min_value=0.5)
         burn = b.number_input('m" (kg/m²·s)', value=0.024, min_value=0.001)
         hc = c.number_input("Hc (kJ/kg)", value=44000.0, min_value=1000.0)
         distance = d.number_input("Distância ao alvo (m)", value=20.0, min_value=1.0)
+
         if st.button("Rodar pool fire", type="primary"):
             st.session_state.pool_fire_result = pool_fire(diameter, burn, hc, distance)
+
         if st.session_state.pool_fire_result:
             r = st.session_state.pool_fire_result
             p1, p2, p3 = st.columns(3)
@@ -381,6 +400,7 @@ with consequence_tab:
                 unsafe_allow_html=True,
             )
             st.markdown(f"<div class='note-card'><b>Zona:</b> {r['zone']}</div>", unsafe_allow_html=True)
+
     with suggest_tab:
         process_txt = st.text_area("Descrição resumida do caso", height=140)
         compound_name = st.text_input(
@@ -399,12 +419,16 @@ with docs_tab:
         type=["pdf", "docx", "xlsx", "xls", "csv", "txt", "md", "json"],
     )
     c1, c2 = st.columns([1, 2])
+
     with c1:
         if st.button("Indexar documentos", type="primary", disabled=not uploads):
-            added = kb.ingest_streamlit_uploads(uploads or [])
-            st.success(f"{added} chunks indexados.")
+            with st.spinner("Indexando documentos..."):
+                added = kb.ingest_streamlit_uploads(uploads or [])
+                st.success(f"{added} chunks indexados.")
+
     with c2:
         st.caption("Faça upload de PFD, procedimentos, memoriais descritivos, FISPQ, planilhas e relatórios.")
+
     search_query = st.text_input(
         "Buscar no acervo da sessão",
         placeholder="Ex.: LAHH, amônia, intertravamento, temperatura máxima",
@@ -416,10 +440,13 @@ with docs_tab:
                 f"**{hit.chunk.source_name}** · página {hit.chunk.page or '—'} · score={hit.score:.3f} · {hit.match_reason}"
             )
             st.caption(hit.chunk.text[:500] + ("..." if len(hit.chunk.text) > 500 else ""))
+
     if st.button("Extrair insights de segurança com IA", disabled=(not ai.enabled or not kb.chunks)):
-        hits = kb.search("chemicals equipment instruments safeguards interlocks operating limits hazards", top_k=8)
-        context_blocks = [{"source": f"{h.chunk.source_name} p.{h.chunk.page or '-'}", "text": h.chunk.text} for h in hits]
-        st.session_state.doc_insights = extract_document_insights(ai, context_blocks)
+        with st.spinner("Extraindo insights documentais..."):
+            hits = kb.search("chemicals equipment instruments safeguards interlocks operating limits hazards", top_k=8)
+            context_blocks = [{"source": f"{h.chunk.source_name} p.{h.chunk.page or '-'}", "text": h.chunk.text} for h in hits]
+            st.session_state.doc_insights = extract_document_insights(ai, context_blocks)
+
     if st.session_state.doc_insights:
         st.subheader("Insights documentais")
         st.json(st.session_state.doc_insights)
@@ -432,10 +459,12 @@ with copilot_tab:
     for msg in st.session_state.copilot_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+
     if prompt := st.chat_input("Ex.: Quais lacunas de salvaguarda aparecem neste caso?"):
         st.session_state.copilot_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
+
         context_hits = kb.search(prompt, top_k=6)
         context_blocks = [{"source": f"{h.chunk.source_name} p.{h.chunk.page or '-'}", "text": h.chunk.text} for h in context_hits]
         structured_context = {
@@ -453,14 +482,18 @@ with copilot_tab:
                 "text": json.dumps(structured_context, ensure_ascii=False, default=str)[:7000],
             }
         )
-        answer = ai.ask(prompt, context_blocks=context_blocks, reasoning=True).answer
-        st.session_state.copilot_messages.append({"role": "assistant", "content": answer})
+
         with st.chat_message("assistant"):
-            st.markdown(answer)
+            with st.spinner("Pensando..."):
+                answer = ai.ask(prompt, context_blocks=context_blocks, reasoning=True).answer
+                st.markdown(answer)
+
+        st.session_state.copilot_messages.append({"role": "assistant", "content": answer})
 
 with reports_tab:
     st.subheader("Gerador de relatório profissional")
     case_name = st.text_input("Nome do caso", value=st.session_state.get("last_case_name", "Untitled case"))
+
     if st.button("Montar relatório", type="primary"):
         payload = {
             "compound": st.session_state.selected_compound or {},
@@ -472,14 +505,16 @@ with reports_tab:
             "document_insights": st.session_state.doc_insights or {},
             "chat_summary": st.session_state.copilot_messages[-6:],
         }
-        st.session_state.report_payload = payload
-        st.session_state.report_bundle = report_service.build_bundle(case_name, payload)
-        st.success("Relatório gerado.")
+        with st.spinner("Gerando relatório..."):
+            st.session_state.report_payload = payload
+            st.session_state.report_bundle = report_service.build_bundle(case_name, payload)
+            st.success("Relatório gerado.")
+
     bundle = st.session_state.get("report_bundle")
     if bundle:
-        st.download_button("Baixar HTML", bundle.html, file_name=f"{bundle.filename_stem}.html", mime="text/html")
-        st.download_button("Baixar PDF", bundle.pdf, file_name=f"{bundle.filename_stem}.pdf", mime="application/pdf")
-        st.download_button("Baixar Markdown", bundle.markdown, file_name=f"{bundle.filename_stem}.md", mime="text/markdown")
+        st.download_button("Baixar HTML", bundle.html, file_name=f"{bundle.filename_stem}.html", mime="text/html", width="stretch")
+        st.download_button("Baixar PDF", bundle.pdf, file_name=f"{bundle.filename_stem}.pdf", mime="application/pdf", width="stretch")
+        st.download_button("Baixar Markdown", bundle.markdown, file_name=f"{bundle.filename_stem}.md", mime="text/markdown", width="stretch")
         with st.expander("Pré-visualizar markdown"):
             st.markdown(bundle.markdown.decode("utf-8"))
 
