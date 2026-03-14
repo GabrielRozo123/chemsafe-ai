@@ -104,6 +104,9 @@ class AIClient:
         if json_mode:
             kwargs["text"] = {"format": {"type": "json_object"}}
 
+        if reasoning:
+            kwargs["reasoning"] = {"effort": "medium"}
+
         try:
             response = self.client.responses.create(**kwargs)
             answer = self._extract_text(response)
@@ -168,20 +171,99 @@ class AIClient:
         system_prompt: str,
         context_blocks: Optional[Iterable[Dict[str, Any]]] = None,
         reasoning: bool = False,
+        schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        result = self.ask(
-            user_prompt,
-            system_prompt=system_prompt,
-            context_blocks=context_blocks,
-            json_mode=True,
-            reasoning=reasoning,
+        if not self.enabled:
+            return {
+                "error": "openai_disabled",
+                "raw": "OPENAI_API_KEY não configurada",
+            }
+
+        blocks: List[Dict[str, Any]] = []
+
+        if system_prompt:
+            blocks.append(
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": system_prompt}],
+                }
+            )
+
+        if context_blocks:
+            context_text = []
+            for idx, block in enumerate(context_blocks, start=1):
+                source = block.get("source", "fonte")
+                text = block.get("text", "")
+                context_text.append(f"[CTX-{idx}] {source}\n{text}")
+
+            blocks.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "Contexto documental:\n\n" + "\n\n".join(context_text),
+                        }
+                    ],
+                }
+            )
+
+        blocks.append(
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": user_prompt}],
+            }
         )
 
+        kwargs: Dict[str, Any] = {
+            "model": settings.reasoning_model if reasoning else settings.text_model,
+            "input": blocks,
+        }
+
+        if schema:
+            kwargs["text"] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": schema["name"],
+                    "strict": schema.get("strict", True),
+                    "schema": schema["schema"],
+                }
+            }
+        else:
+            kwargs["text"] = {"format": {"type": "json_object"}}
+
+        if reasoning:
+            kwargs["reasoning"] = {"effort": "medium"}
+
         try:
-            return json.loads(result.answer)
-        except json.JSONDecodeError:
+            response = self.client.responses.create(**kwargs)
+            answer = self._extract_text(response)
+
+            append_audit(
+                "llm_call_json",
+                {
+                    "model": kwargs["model"],
+                    "reasoning": reasoning,
+                    "schema_name": schema["name"] if schema else "json_object",
+                    "user_prompt": user_prompt[:1500],
+                    "answer_preview": answer[:1500],
+                },
+            )
+
+            return json.loads(answer)
+
+        except Exception as e:
+            append_audit(
+                "llm_json_error",
+                {
+                    "model": kwargs["model"],
+                    "reasoning": reasoning,
+                    "schema_name": schema["name"] if schema else "json_object",
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)[:2000],
+                },
+            )
             return {
-                "error": "invalid_json",
-                "raw": result.answer,
-                "warnings": getattr(result, "warnings", []),
+                "error": type(e).__name__,
+                "raw": str(e),
             }
