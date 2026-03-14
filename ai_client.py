@@ -25,7 +25,7 @@ from audit import append_audit
 
 class AIClient:
     def __init__(self) -> None:
-        api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+        api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
         self.enabled = bool(api_key) and OpenAI is not None
         self.client = OpenAI(api_key=api_key) if self.enabled else None
 
@@ -104,31 +104,62 @@ class AIClient:
         if json_mode:
             kwargs["text"] = {"format": {"type": "json_object"}}
 
-        response = self.client.responses.create(**kwargs)
-        answer = self._extract_text(response)
+        try:
+            response = self.client.responses.create(**kwargs)
+            answer = self._extract_text(response)
 
-        append_audit(
-            "llm_call",
-            {
-                "model": kwargs["model"],
-                "json_mode": json_mode,
-                "system_prompt": sys_prompt[:500] if sys_prompt else "",
-                "user_prompt": user_prompt[:2000],
-                "answer_preview": answer[:1500],
-            },
-        )
+            append_audit(
+                "llm_call",
+                {
+                    "model": kwargs["model"],
+                    "json_mode": json_mode,
+                    "reasoning": reasoning,
+                    "system_prompt": sys_prompt[:500] if sys_prompt else "",
+                    "user_prompt": user_prompt[:2000],
+                    "answer_preview": answer[:1500],
+                },
+            )
 
-        return CopilotAnswer(answer=answer, raw=response)
+            return CopilotAnswer(answer=answer, raw=response)
+
+        except Exception as e:
+            append_audit(
+                "llm_error",
+                {
+                    "model": kwargs["model"],
+                    "json_mode": json_mode,
+                    "reasoning": reasoning,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)[:2000],
+                    "user_prompt": user_prompt[:1000],
+                },
+            )
+            return CopilotAnswer(
+                answer=f"Erro ao chamar OpenAI: {type(e).__name__}: {str(e)}",
+                warnings=[type(e).__name__],
+            )
 
     def embed(self, texts: List[str]) -> List[List[float]]:
         if not self.enabled:
             raise RuntimeError("OPENAI_API_KEY não configurada")
 
-        response = self.client.embeddings.create(
-            model=settings.embedding_model,
-            input=texts,
-        )
-        return [item.embedding for item in response.data]
+        try:
+            response = self.client.embeddings.create(
+                model=settings.embedding_model,
+                input=texts,
+            )
+            return [item.embedding for item in response.data]
+        except Exception as e:
+            append_audit(
+                "embedding_error",
+                {
+                    "model": settings.embedding_model,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)[:2000],
+                    "n_texts": len(texts),
+                },
+            )
+            raise
 
     def ask_json(
         self,
@@ -145,7 +176,12 @@ class AIClient:
             json_mode=True,
             reasoning=reasoning,
         )
+
         try:
             return json.loads(result.answer)
         except json.JSONDecodeError:
-            return {"error": "invalid_json", "raw": result.answer}
+            return {
+                "error": "invalid_json",
+                "raw": result.answer,
+                "warnings": getattr(result, "warnings", []),
+            }
