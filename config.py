@@ -10,9 +10,9 @@ class Settings:
     app_name: str = "ChemSafe Pro AI"
     app_version: str = "3.0"
 
-    # Modelos válidos da API atual
+    # Deixe simples e válido para subir agora
     text_model: str = os.getenv("OPENAI_MODEL_TEXT", "gpt-5-mini")
-    reasoning_model: str = os.getenv("OPENAI_MODEL_REASONING", "gpt-5")
+    reasoning_model: str = os.getenv("OPENAI_MODEL_REASONING", "gpt-5-mini")
     embedding_model: str = os.getenv("OPENAI_MODEL_EMBED", "text-embedding-3-large")
 
     audit_dir: Path = Path(os.getenv("CHEMSAFE_AUDIT_DIR", ".chemsafe_audit"))
