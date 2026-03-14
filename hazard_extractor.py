@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
@@ -13,28 +11,85 @@ if str(ROOT_DIR) not in sys.path:
 from models import HazardScenario
 from prompts import DOCUMENT_INSIGHTS_SYSTEM, PREHAZOP_SYSTEM
 
+PREHAZOP_JSON_SCHEMA = {
+    "name": "prehazop_payload",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "scenarios": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "node": {"type": "string"},
+                        "deviation": {"type": "string"},
+                        "cause": {"type": "string"},
+                        "consequence": {"type": "string"},
+                        "safeguards": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "recommendations": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "severity": {"type": "string"},
+                        "likelihood": {"type": "string"},
+                        "risk_rank": {"type": "string"},
+                    },
+                    "required": [
+                        "node",
+                        "deviation",
+                        "cause",
+                        "consequence",
+                        "safeguards",
+                        "recommendations",
+                        "severity",
+                        "likelihood",
+                        "risk_rank",
+                    ],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["scenarios"],
+        "additionalProperties": False,
+    },
+}
+
+DOC_INSIGHTS_JSON_SCHEMA = {
+    "name": "document_insights_payload",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "chemicals": {"type": "array", "items": {"type": "string"}},
+            "equipment": {"type": "array", "items": {"type": "string"}},
+            "instruments": {"type": "array", "items": {"type": "string"}},
+            "safeguards": {"type": "array", "items": {"type": "string"}},
+            "operating_limits": {"type": "array", "items": {"type": "string"}},
+            "hazards": {"type": "array", "items": {"type": "string"}},
+            "notes": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": [
+            "chemicals",
+            "equipment",
+            "instruments",
+            "safeguards",
+            "operating_limits",
+            "hazards",
+            "notes",
+        ],
+        "additionalProperties": False,
+    },
+}
+
 
 def _safe_list(value: Any) -> List[Any]:
     if isinstance(value, list):
         return value
     return []
-
-
-def _try_extract_json(raw: str) -> Dict[str, Any]:
-    raw = raw.strip()
-    try:
-        return json.loads(raw)
-    except Exception:
-        pass
-
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except Exception:
-            pass
-
-    return {"error": "invalid_json", "raw": raw}
 
 
 def generate_hazop_from_text(
@@ -62,8 +117,7 @@ Requisitos:
 - retornar cenários tecnicamente plausíveis para segurança de processo;
 - incluir desvio, causa, consequência, salvaguardas existentes e recomendação;
 - priorizar linguagem de engenharia química / process safety;
-- considerar cenários de perda de contenção, sobrepressão, runaway, toxic release, incêndio e falhas instrumentadas quando aplicável;
-- responder em JSON válido.
+- considerar cenários de perda de contenção, sobrepressão, runaway, toxic release, incêndio e falhas instrumentadas quando aplicável.
 """.strip()
 
     result = ai_client.ask_json(
@@ -71,32 +125,29 @@ Requisitos:
         system_prompt=PREHAZOP_SYSTEM,
         context_blocks=None,
         reasoning=True,
+        schema=PREHAZOP_JSON_SCHEMA,
     )
 
-    if isinstance(result, dict) and result.get("error") == "invalid_json":
-        result = _try_extract_json(result.get("raw", ""))
+    if not isinstance(result, dict):
+        return []
 
-    raw_items = []
-    if isinstance(result, dict):
-        if isinstance(result.get("scenarios"), list):
-            raw_items = result["scenarios"]
-        elif isinstance(result.get("hazop"), list):
-            raw_items = result["hazop"]
-        elif isinstance(result.get("items"), list):
-            raw_items = result["items"]
+    raw_items = result.get("scenarios", [])
+    if not isinstance(raw_items, list):
+        return []
 
     scenarios: List[HazardScenario] = []
     for item in raw_items:
         if not isinstance(item, dict):
             continue
+
         scenarios.append(
             HazardScenario(
                 node=item.get("node", equipment),
                 deviation=item.get("deviation", "Desvio não informado"),
                 cause=item.get("cause", "Causa não informada"),
                 consequence=item.get("consequence", "Consequência não informada"),
-                safeguards=_safe_list(item.get("safeguards")),
-                recommendations=_safe_list(item.get("recommendations")),
+                safeguards=item.get("safeguards", []) if isinstance(item.get("safeguards"), list) else [],
+                recommendations=item.get("recommendations", []) if isinstance(item.get("recommendations"), list) else [],
                 severity=str(item.get("severity", "Medium")),
                 likelihood=str(item.get("likelihood", "Medium")),
                 risk_rank=str(item.get("risk_rank", "Médio")),
@@ -124,7 +175,7 @@ def extract_document_insights(
     user_prompt = """
 Extraia insights de segurança de processo a partir do contexto documental.
 
-Retorne JSON válido com os campos:
+Retorne JSON com os campos:
 - chemicals
 - equipment
 - instruments
@@ -145,10 +196,8 @@ Regras:
         system_prompt=DOCUMENT_INSIGHTS_SYSTEM,
         context_blocks=context_blocks,
         reasoning=False,
+        schema=DOC_INSIGHTS_JSON_SCHEMA,
     )
-
-    if isinstance(result, dict) and result.get("error") == "invalid_json":
-        result = _try_extract_json(result.get("raw", ""))
 
     if not isinstance(result, dict):
         return {
@@ -159,6 +208,17 @@ Regras:
             "operating_limits": [],
             "hazards": [],
             "notes": ["Falha ao interpretar a saída do modelo."],
+        }
+
+    if result.get("error"):
+        return {
+            "chemicals": [],
+            "equipment": [],
+            "instruments": [],
+            "safeguards": [],
+            "operating_limits": [],
+            "hazards": [],
+            "notes": [f"Erro ao extrair insights: {result.get('raw', result.get('error'))}"],
         }
 
     return {
