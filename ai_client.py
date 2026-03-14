@@ -10,6 +10,8 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+import streamlit as st
+
 try:
     from openai import OpenAI
 except Exception:
@@ -23,8 +25,9 @@ from audit import append_audit
 
 class AIClient:
     def __init__(self) -> None:
-        self.enabled = bool(os.getenv("OPENAI_API_KEY")) and OpenAI is not None
-        self.client = OpenAI() if self.enabled else None
+        api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+        self.enabled = bool(api_key) and OpenAI is not None
+        self.client = OpenAI(api_key=api_key) if self.enabled else None
 
     def _extract_text(self, response: Any) -> str:
         if hasattr(response, "output_text") and response.output_text:
