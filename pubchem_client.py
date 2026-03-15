@@ -17,18 +17,47 @@ def _safe_get(url: str, timeout: int = 8) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _get_first_cid_from_name(query: str) -> Optional[int]:
+    data = _safe_get(f"{PUBCHEM_BASE}/compound/name/{requests.utils.quote(query)}/cids/JSON")
+    if not data:
+        return None
+    try:
+        return data["IdentifierList"]["CID"][0]
+    except Exception:
+        return None
+
+
+def _get_first_cid_from_formula(query: str) -> Optional[int]:
+    data = _safe_get(f"{PUBCHEM_BASE}/compound/fastformula/{requests.utils.quote(query)}/cids/JSON")
+    if not data:
+        return None
+    try:
+        return data["IdentifierList"]["CID"][0]
+    except Exception:
+        return None
+
+
+def _resolve_cid(query: str) -> Optional[int]:
+    cid = _get_first_cid_from_name(query)
+    if cid is not None:
+        return cid
+
+    q = query.strip().upper()
+    if q and all(ch.isalnum() for ch in q):
+        cid = _get_first_cid_from_formula(q)
+        if cid is not None:
+            return cid
+
+    return None
+
+
 def fetch_pubchem_record(query: str) -> Dict[str, Any]:
     query = (query or "").strip()
     if not query:
         return {}
 
-    cid_data = _safe_get(f"{PUBCHEM_BASE}/compound/name/{requests.utils.quote(query)}/cids/JSON")
-    if not cid_data:
-        return {}
-
-    try:
-        cid = cid_data["IdentifierList"]["CID"][0]
-    except Exception:
+    cid = _resolve_cid(query)
+    if cid is None:
         return {}
 
     prop_names = ",".join(
@@ -47,6 +76,7 @@ def fetch_pubchem_record(query: str) -> Dict[str, Any]:
             "Charge",
         ]
     )
+
     prop_data = _safe_get(f"{PUBCHEM_BASE}/compound/cid/{cid}/property/{prop_names}/JSON")
     synonyms_data = _safe_get(f"{PUBCHEM_BASE}/compound/cid/{cid}/synonyms/JSON")
 
@@ -60,7 +90,7 @@ def fetch_pubchem_record(query: str) -> Dict[str, Any]:
     synonyms: List[str] = []
     if synonyms_data:
         try:
-            synonyms = synonyms_data["InformationList"]["Information"][0]["Synonym"][:25]
+            synonyms = synonyms_data["InformationList"]["Information"][0]["Synonym"][:40]
         except Exception:
             synonyms = []
 
