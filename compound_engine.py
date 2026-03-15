@@ -6,6 +6,7 @@ from chemicals_seed import LOCAL_COMPOUNDS
 from compound_profile import CompoundProfile, PropertyValue
 from pubchem_client import fetch_pubchem_record
 from references_registry import build_references
+from safety_rules import build_confidence_score, build_incompatibility_matrix
 from source_links import build_official_source_links
 
 
@@ -123,6 +124,8 @@ def _generic_profile_from_pubchem(query: str, pubchem: Dict[str, Any]) -> Option
         {"check": "Chemical identity", "status": "OK", "detail": "Dados básicos de identidade encontrados via PubChem"},
         {"check": "Process safety package", "status": "GAP", "detail": "Faltam dados críticos para screening robusto"},
     ]
+    profile.incompatibility_matrix = build_incompatibility_matrix(profile)
+    profile.confidence_score = build_confidence_score(profile)
     return profile
 
 
@@ -341,6 +344,8 @@ def build_compound_profile(query: str) -> Optional[CompoundProfile]:
 
     profile.references = build_references(profile)
     profile.readiness = _build_readiness(profile)
+    profile.incompatibility_matrix = build_incompatibility_matrix(profile)
+    profile.confidence_score = build_confidence_score(profile)
     return profile
 
 
