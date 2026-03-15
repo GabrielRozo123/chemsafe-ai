@@ -30,6 +30,10 @@ class CompoundProfile:
 
     source_trace: List[Dict[str, Any]] = field(default_factory=list)
     references: List[Dict[str, Any]] = field(default_factory=list)
+    readiness: List[Dict[str, Any]] = field(default_factory=list)
+
+    confidence_score: float = 0.0
+    incompatibility_matrix: List[Dict[str, Any]] = field(default_factory=list)
 
     def prop(self, key: str, default: Optional[Any] = None) -> Any:
         item = self.physchem.get(key)
