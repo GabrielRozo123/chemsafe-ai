@@ -211,21 +211,21 @@ st.markdown(
 overview_tab, compound_tab, hazop_tab, bowtie_tab, lopa_tab, consequence_tab, refs_tab = st.tabs(
     ["Overview", "Composto", "HAZOP", "Bow-Tie", "LOPA", "Consequências", "Referências"]
 )
-
+dispersion_mode = classify_dispersion_mode(profile)
 with overview_tab:
-    c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(metric_card("Composto", profile.identity.get("name", "—")), unsafe_allow_html=True)
-    c2.markdown(metric_card("CAS", profile.identity.get("cas", "—")), unsafe_allow_html=True)
-    c3.markdown(metric_card("Rotas priorizadas", str(len(profile.routing))), unsafe_allow_html=True)
-    c4.markdown(
-        metric_card(
-            "Confiança",
-            f"{profile.confidence_score:.0f}/100",
-            "risk-green" if profile.confidence_score >= 80 else "risk-amber" if profile.confidence_score >= 50 else "risk-red",
-        ),
-        unsafe_allow_html=True,
-    )
-
+    c1, c2, c3, c4, c5 = st.columns(5)
+c1.markdown(metric_card("Composto", profile.identity.get("name", "—")), unsafe_allow_html=True)
+c2.markdown(metric_card("CAS", profile.identity.get("cas", "—")), unsafe_allow_html=True)
+c3.markdown(metric_card("Rotas priorizadas", str(len(profile.routing))), unsafe_allow_html=True)
+c4.markdown(
+    metric_card(
+        "Confiança",
+        f"{profile.confidence_score:.0f}/100",
+        "risk-green" if profile.confidence_score >= 80 else "risk-amber" if profile.confidence_score >= 50 else "risk-red",
+    ),
+    unsafe_allow_html=True,
+)
+c5.markdown(metric_card("Modo de dispersão", dispersion_mode["label"]), unsafe_allow_html=True)
     a, b = st.columns(2)
     with a:
         st.markdown("<div class='panel'><h3>Hazard fingerprint</h3></div>", unsafe_allow_html=True)
