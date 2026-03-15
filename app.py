@@ -23,6 +23,8 @@ from dense_gas_router import classify_dispersion_mode
 from deterministic import IPL_CATALOG, compute_lopa, gaussian_dispersion, pool_fire
 from hazop_db import HAZOP_DB
 from property_status import build_property_status_df, summarize_property_status
+from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
+from psi_visuals import build_psi_pillars_figure, build_psi_score_figure
 from risk_register import build_risk_register
 from risk_visuals import (
     build_confidence_figure,
@@ -351,12 +353,14 @@ with st.sidebar:
         for item in saved_cases[:6]:
             st.caption(f"• {item['case_name']}")
 
+
 # Inicialização
 if st.session_state.profile is None:
     load_profile_from_key(st.session_state.selected_compound_key)
 
 profile = st.session_state.profile
 ensure_bowtie_state(profile)
+
 
 # =========================
 # Hero
@@ -379,12 +383,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # =========================
 # Tabs
 # =========================
-overview_tab, compound_tab, compare_tab, hazop_tab, bowtie_tab, lopa_tab, consequence_tab, refs_tab, cases_tab = st.tabs(
-    ["Overview", "Composto", "Comparador", "HAZOP", "Bow-Tie", "LOPA", "Consequências", "Referências", "Casos"]
+overview_tab, compound_tab, compare_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, consequence_tab, refs_tab, cases_tab = st.tabs(
+    ["Overview", "Composto", "Comparador", "HAZOP", "Bow-Tie", "LOPA", "PSI / PSM", "Consequências", "Referências", "Casos"]
 )
+
 
 # =========================
 # OVERVIEW
@@ -438,6 +444,7 @@ with overview_tab:
         st.markdown("<div class='panel'><h3>Lacunas de dados</h3></div>", unsafe_allow_html=True)
         for gap in profile.validation_gaps:
             st.warning(gap)
+
 
 # =========================
 # COMPOSTO
@@ -496,6 +503,7 @@ with compound_tab:
             )
             st.link_button(f"Abrir {item['source']}", item["url"], width="stretch")
 
+
 # =========================
 # COMPARADOR
 # =========================
@@ -522,6 +530,7 @@ with compare_tab:
             st.info(line)
     else:
         st.info("Carregue um segundo composto para comparar propriedades e riscos.")
+
 
 # =========================
 # HAZOP
@@ -578,20 +587,28 @@ with hazop_tab:
             )
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
+
 # =========================
 # BOW-TIE
 # =========================
 with bowtie_tab:
     st.markdown("<div class='panel'><h3>Bow-Tie editável do caso</h3></div>", unsafe_allow_html=True)
 
+    modo_bowtie = st.radio(
+        "Modo de visualização",
+        options=["Executivo", "Técnico"],
+        horizontal=True,
+    )
+    modo_bowtie_internal = "executivo" if modo_bowtie == "Executivo" else "tecnico"
+
     c1, c2 = st.columns(2)
     with c1:
-        st.text_area("Ameaças (uma por linha)", key="bowtie_threats", height=140)
-        st.text_area("Barreiras preventivas (uma por linha)", key="bowtie_pre", height=140)
+        st.text_area("Ameaças (uma por linha)", key="bowtie_threats", height=160)
+        st.text_area("Barreiras preventivas (uma por linha)", key="bowtie_pre", height=160)
     with c2:
         st.text_input("Top Event", key="bowtie_top")
-        st.text_area("Barreiras mitigadoras (uma por linha)", key="bowtie_mit", height=140)
-        st.text_area("Consequências (uma por linha)", key="bowtie_cons", height=140)
+        st.text_area("Barreiras mitigadoras (uma por linha)", key="bowtie_mit", height=160)
+        st.text_area("Consequências (uma por linha)", key="bowtie_cons", height=160)
 
     bt = bowtie_payload()
     st.pyplot(
@@ -601,14 +618,16 @@ with bowtie_tab:
             top_event=bt["top_event"],
             barriers_mit=bt["barriers_mit"],
             consequences=bt["consequences"],
+            mode=modo_bowtie_internal,
         ),
         clear_figure=True,
     )
 
     st.markdown(
-        "<div class='note-card'>Edite livremente o Bow-Tie para o caso atual. Esse conteúdo também pode ser salvo junto com o caso.</div>",
+        "<div class='note-card'><b>Modo Executivo:</b> visão mais limpa para reunião, cliente e resumo.<br><b>Modo Técnico:</b> maior densidade de informação para engenharia.</div>",
         unsafe_allow_html=True,
     )
+
 
 # =========================
 # LOPA
@@ -671,6 +690,52 @@ with lopa_tab:
         st.markdown("<div class='panel'><h3>Panorama das camadas de proteção</h3></div>", unsafe_allow_html=True)
         selected_names = st.session_state.get("selected_ipl_names", [])
         st.pyplot(build_ipl_layers_figure(selected_names, suggested_ipls), clear_figure=True)
+
+
+# =========================
+# PSI / PSM
+# =========================
+with psi_tab:
+    st.markdown("<div class='panel'><h3>PSI / PSM Readiness do caso</h3></div>", unsafe_allow_html=True)
+
+    psi_df = build_psi_readiness_df(
+        profile=profile,
+        lopa_result=st.session_state.get("lopa_result"),
+        bowtie=bowtie_payload(),
+    )
+    psi_summary = summarize_psi_readiness(psi_df)
+
+    a, b, c, d = st.columns(4)
+    a.markdown(
+        metric_card(
+            "Score PSI / PSM",
+            f"{psi_summary['score']:.0f}/100",
+            "risk-green" if psi_summary["score"] >= 80 else "risk-amber" if psi_summary["score"] >= 50 else "risk-red",
+        ),
+        unsafe_allow_html=True,
+    )
+    b.markdown(metric_card("Itens OK", str(psi_summary["ok"]), "risk-green"), unsafe_allow_html=True)
+    c.markdown(metric_card("Itens parciais", str(psi_summary["partial"]), "risk-amber"), unsafe_allow_html=True)
+    d.markdown(metric_card("Gaps", str(psi_summary["gap"]), "risk-red"), unsafe_allow_html=True)
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("<div class='panel'><h3>Score de prontidão</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_psi_score_figure(psi_summary), clear_figure=True)
+
+    with right:
+        st.markdown("<div class='panel'><h3>Cobertura por pilar</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_psi_pillars_figure(psi_df), clear_figure=True)
+
+    st.markdown("<div class='panel'><h3>Checklist PSI / PSM</h3></div>", unsafe_allow_html=True)
+    st.dataframe(psi_df, width="stretch", hide_index=True)
+
+    gaps = psi_df[psi_df["Status"] == "GAP"]
+    if not gaps.empty:
+        st.markdown("<div class='panel'><h3>Ações prioritárias</h3></div>", unsafe_allow_html=True)
+        for _, row in gaps.head(5).iterrows():
+            st.warning(f"{row['Item']}: {row['Ação recomendada']}")
+
 
 # =========================
 # CONSEQUÊNCIAS
@@ -750,6 +815,7 @@ with consequence_tab:
         else:
             st.info("O perfil do composto não sugere pool fire dominante neste momento.")
 
+
 # =========================
 # REFERÊNCIAS
 # =========================
@@ -763,6 +829,7 @@ with refs_tab:
     st.markdown("<div class='panel'><h3>Links oficiais</h3></div>", unsafe_allow_html=True)
     for item in profile.storage.get("official_links", []):
         st.link_button(f"{item['source']} — {item['purpose']}", item["url"], width="stretch")
+
 
 # =========================
 # CASOS
