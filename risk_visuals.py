@@ -43,6 +43,22 @@ def build_source_coverage_figure(profile: Any):
     return fig
 
 
+def build_confidence_figure(profile: Any):
+    score = float(getattr(profile, "confidence_score", 0.0))
+    remaining = max(0.0, 100.0 - score)
+
+    fig, ax = plt.subplots(figsize=(6.0, 3.6))
+    ax.barh(["Confidence"], [score], label="Score")
+    ax.barh(["Confidence"], [remaining], left=[score], label="Missing")
+    ax.set_xlim(0, 100)
+    ax.set_xlabel("Score")
+    ax.set_title("Data Confidence")
+    ax.text(min(score + 2, 95), 0, f"{score:.0f}/100", va="center")
+    ax.grid(axis="x", alpha=0.25)
+    fig.tight_layout()
+    return fig
+
+
 def build_risk_matrix_figure(priorities: Iterable[dict]):
     fig, ax = plt.subplots(figsize=(6.0, 5.2))
 
@@ -113,5 +129,35 @@ def build_ipl_layers_figure(selected_ipls: List[str], suggested_ipls: List[str])
     ax.set_yticklabels(["missing", "present"])
     ax.set_title("Protection Layers Snapshot")
     ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    return fig
+
+
+def build_incompatibility_matrix_figure(profile: Any):
+    matrix = getattr(profile, "incompatibility_matrix", [])
+    labels = [row["category"] for row in matrix] if matrix else ["No data"]
+    status = [row["status"] for row in matrix] if matrix else ["Review"]
+
+    mapping = {
+        "Compatible": 1,
+        "Caution": 2,
+        "Incompatible": 3,
+        "Review": 0,
+    }
+
+    values = [mapping.get(s, 0) for s in status]
+    arr = np.array(values).reshape(1, len(values))
+
+    fig, ax = plt.subplots(figsize=(8.6, 2.4))
+    ax.imshow(arr, aspect="auto")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=25, ha="right")
+    ax.set_yticks([0])
+    ax.set_yticklabels(["Status"])
+    ax.set_title("Incompatibility Matrix")
+
+    for j, s in enumerate(status):
+        ax.text(j, 0, s, ha="center", va="center", fontsize=8)
+
     fig.tight_layout()
     return fig
