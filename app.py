@@ -42,6 +42,9 @@ st.set_page_config(
 st.markdown(APP_CSS, unsafe_allow_html=True)
 init_state()
 
+if "last_hazop_raw" not in st.session_state:
+    st.session_state.last_hazop_raw = None
+
 ai = AIClient()
 if st.session_state.knowledge_base is None:
     st.session_state.knowledge_base = LocalKnowledgeBase(ai)
@@ -232,20 +235,97 @@ with hazop_tab:
     )
 
     if st.button("Gerar pré-HAZOP com IA", type="primary", disabled=not ai.enabled):
-        with st.spinner("Consultando IA e estruturando cenários..."):
-            scenarios = generate_hazop_from_text(ai, process_description, equipment, operating_context)
-            st.session_state.risk_register = [s.__dict__ for s in scenarios]
-            st.session_state.last_case_name = equipment
+        if not process_description.strip() or not operating_context.strip():
+            st.warning("Preencha a descrição do processo e o contexto operacional.")
+        else:
+            with st.spinner("Consultando IA e estruturando cenários..."):
+                raw_result = ai.ask_json(
+                    f"""
+Gere um pré-HAZOP técnico para o seguinte caso.
 
-            if not scenarios:
-                st.warning(
-                    "A IA respondeu, mas nenhum cenário estruturado foi extraído. "
-                    "Preencha os dois campos e verifique o log de auditoria se isso persistir."
+Equipamento / nó:
+{equipment}
+
+Descrição do processo:
+{process_description}
+
+Contexto operacional:
+{operating_context}
+
+Requisitos:
+- retornar cenários tecnicamente plausíveis para segurança de processo;
+- incluir desvio, causa, consequência, salvaguardas existentes e recomendação;
+- priorizar linguagem de engenharia química / process safety;
+- considerar cenários de perda de contenção, sobrepressão, runaway, toxic release, incêndio e falhas instrumentadas quando aplicável.
+""".strip(),
+                    system_prompt="""
+Você é um especialista sênior em segurança de processo, HAZOP, LOPA, SIS/SIL e consequence analysis.
+Responda estritamente em JSON conforme o schema solicitado.
+""".strip(),
+                    reasoning=True,
+                    schema={
+                        "name": "prehazop_payload",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "scenarios": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "node": {"type": "string"},
+                                            "deviation": {"type": "string"},
+                                            "cause": {"type": "string"},
+                                            "consequence": {"type": "string"},
+                                            "safeguards": {"type": "array", "items": {"type": "string"}},
+                                            "recommendations": {"type": "array", "items": {"type": "string"}},
+                                            "severity": {"type": "string"},
+                                            "likelihood": {"type": "string"},
+                                            "risk_rank": {"type": "string"},
+                                        },
+                                        "required": [
+                                            "node",
+                                            "deviation",
+                                            "cause",
+                                            "consequence",
+                                            "safeguards",
+                                            "recommendations",
+                                            "severity",
+                                            "likelihood",
+                                            "risk_rank",
+                                        ],
+                                        "additionalProperties": False,
+                                    },
+                                }
+                            },
+                            "required": ["scenarios"],
+                            "additionalProperties": False,
+                        },
+                    },
                 )
+
+                st.session_state.last_hazop_raw = raw_result
+
+                raw_items = raw_result.get("scenarios", []) if isinstance(raw_result, dict) else []
+                scenarios = raw_items if isinstance(raw_items, list) else []
+
+                st.session_state.risk_register = scenarios
+                st.session_state.last_case_name = equipment
+
+                if not scenarios:
+                    st.warning(
+                        "A IA respondeu, mas nenhum cenário estruturado foi extraído. "
+                        "Veja a resposta bruta no bloco de debug abaixo."
+                    )
 
     if st.session_state.risk_register:
         st.subheader("Cenários gerados")
         st.dataframe(pd.DataFrame(st.session_state.risk_register), width="stretch", hide_index=True)
+
+    if st.session_state.get("last_hazop_raw") is not None:
+        with st.expander("Debug — resposta bruta da IA"):
+            st.json(st.session_state.last_hazop_raw)
 
 with bowtie_tab:
     st.markdown(
