@@ -11,40 +11,11 @@ BLUE = "#4da3ff"
 GREEN = "#34d399"
 RED = "#fb7185"
 GRID = "#29476d"
+PURPLE = "#5b4bb7"
 
 
-def build_bowtie_figure(profile):
-    threats = []
-    barriers_pre = []
-    consequences = []
-    barriers_mit = []
-
-    if profile.flags.get("flammable"):
-        threats += ["Fonte de ignição", "Vazamento", "Ventilação insuficiente"]
-        barriers_pre += ["Controle de ignição", "Detecção", "Aterramento"]
-        consequences += ["Incêndio", "Flash fire", "Dano à instalação"]
-        barriers_mit += ["Combate a incêndio", "Contenção", "Plano de emergência"]
-
-    if profile.flags.get("toxic_inhalation"):
-        threats += ["Falha de vedação", "Abertura indevida", "Sobrepressão"]
-        barriers_pre += ["Isolamento", "ESD", "Inspeção"]
-        consequences += ["Exposição ocupacional", "Evacuação", "Impacto comunitário"]
-        barriers_mit += ["Alarme", "Evacuação", "Abatimento/ventilação"]
-
-    if profile.flags.get("corrosive"):
-        threats += ["Corrosão", "Material incompatível"]
-        barriers_pre += ["Seleção de materiais", "Inspeção de integridade"]
-        consequences += ["Perda de contenção", "Dano a equipamento"]
-        barriers_mit += ["Chuveiro/lava-olhos", "Containment"]
-
-    threats = list(dict.fromkeys(threats))[:4]
-    barriers_pre = list(dict.fromkeys(barriers_pre))[:4]
-    consequences = list(dict.fromkeys(consequences))[:4]
-    barriers_mit = list(dict.fromkeys(barriers_mit))[:4]
-
-    top_event = "Perda de contenção / perda de controle"
-
-    fig, ax = plt.subplots(figsize=(10.5, 5.6))
+def _draw_bowtie(threats, barriers_pre, top_event, barriers_mit, consequences):
+    fig, ax = plt.subplots(figsize=(10.8, 5.8))
     fig.patch.set_facecolor(FIG_BG)
     ax.set_facecolor(AX_BG)
     ax.axis("off")
@@ -54,7 +25,6 @@ def build_bowtie_figure(profile):
         ax.add_patch(rect)
         ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", color=TEXT, fontsize=fs, wrap=True)
 
-    # colunas
     x_threat = 0.03
     x_pre = 0.28
     x_top = 0.43
@@ -69,7 +39,7 @@ def build_bowtie_figure(profile):
     for y, b in zip(y_positions, barriers_pre):
         box(x_pre, y, b, "#1f4b77", w=0.12, h=0.11)
 
-    box(x_top, 0.45, top_event, PURPLE := "#5b4bb7", w=0.12, h=0.12, fs=10)
+    box(x_top, 0.45, top_event, PURPLE, w=0.12, h=0.12, fs=10)
 
     for y, b in zip(y_positions, barriers_mit):
         box(x_mit, y, b, "#1f7a5a", w=0.12, h=0.11)
@@ -77,7 +47,6 @@ def build_bowtie_figure(profile):
     for y, c in zip(y_positions, consequences):
         box(x_cons, y, c, "#7a1f35", w=0.17, h=0.11)
 
-    # setas
     for y in y_positions[: len(threats)]:
         ax.annotate("", xy=(x_pre, y + 0.055), xytext=(x_threat + 0.20, y + 0.055),
                     arrowprops=dict(arrowstyle="->", color=MUTED, lw=1.2))
@@ -99,3 +68,11 @@ def build_bowtie_figure(profile):
 
     fig.tight_layout()
     return fig
+
+
+def build_bowtie_custom_figure(threats, barriers_pre, top_event, barriers_mit, consequences):
+    threats = threats[:4]
+    barriers_pre = barriers_pre[:4]
+    barriers_mit = barriers_mit[:4]
+    consequences = consequences[:4]
+    return _draw_bowtie(threats, barriers_pre, top_event, barriers_mit, consequences)
