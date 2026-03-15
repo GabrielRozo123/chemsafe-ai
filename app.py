@@ -18,6 +18,12 @@ from compound_engine import (
 )
 from deterministic import IPL_CATALOG, compute_lopa, gaussian_dispersion, pool_fire
 from hazop_db import HAZOP_DB
+from risk_visuals import (
+    build_hazard_fingerprint_figure,
+    build_ipl_layers_figure,
+    build_risk_matrix_figure,
+    build_source_coverage_figure,
+)
 
 APP_CSS = """
 <style>
@@ -63,6 +69,13 @@ APP_CSS = """
     border-left: 4px solid #4b88ff;
     border-radius: 12px;
     padding: 0.9rem 1rem;
+}
+.source-card {
+    background: rgba(12, 24, 43, 0.95);
+    border: 1px solid #21416e;
+    border-radius: 14px;
+    padding: 0.9rem;
+    height: 100%;
 }
 </style>
 """
@@ -124,7 +137,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.write("**Meta do produto**")
-    st.caption("Perfil canônico do composto → HAZOP → LOPA → Consequências → Referências")
+    st.caption("Perfil canônico → HAZOP → LOPA → Consequências → Referências")
 
 if st.session_state.profile is None:
     load_profile_from_key(st.session_state.selected_compound_key)
@@ -132,16 +145,17 @@ if st.session_state.profile is None:
 profile = st.session_state.profile
 
 st.markdown(
-    f"""
+    """
     <div class="hero">
       <h1>ChemSafe Pro Deterministic</h1>
       <p>Segurança de processo guiada por propriedades reais, referências oficiais e lógica de decisão transparente.</p>
       <div>
-        <span class="badge">compound_profile</span>
-        <span class="badge">property-aware HAZOP</span>
-        <span class="badge">LOPA assistida</span>
-        <span class="badge">consequence routing</span>
-        <span class="badge">references by source</span>
+        <span class="badge">PubChem live</span>
+        <span class="badge">NIST linked</span>
+        <span class="badge">NIOSH linked</span>
+        <span class="badge">CAMEO linked</span>
+        <span class="badge">risk matrix</span>
+        <span class="badge">IPL stack</span>
       </div>
     </div>
     """,
@@ -167,13 +181,13 @@ with overview_tab:
     )
 
     st.markdown("<div class='panel'><h3>Hazard fingerprint</h3></div>", unsafe_allow_html=True)
-    fp_df = pd.DataFrame(
-        {
-            "axis": list(profile.fingerprint.keys()),
-            "score": list(profile.fingerprint.values()),
-        }
-    )
-    st.bar_chart(fp_df.set_index("axis"))
+    st.pyplot(build_hazard_fingerprint_figure(profile), width="stretch")
+
+    st.markdown("<div class='panel'><h3>Cobertura de fontes</h3></div>", unsafe_allow_html=True)
+    st.pyplot(build_source_coverage_figure(profile), width="stretch")
+
+    st.markdown("<div class='panel'><h3>Readiness para screening</h3></div>", unsafe_allow_html=True)
+    st.dataframe(pd.DataFrame(profile.readiness), width="stretch", hide_index=True)
 
     st.markdown("<div class='panel'><h3>Roteamento automático</h3></div>", unsafe_allow_html=True)
     if profile.routing:
@@ -182,30 +196,23 @@ with overview_tab:
     else:
         st.info("Nenhuma rota dominante identificada.")
 
-    st.markdown("<div class='panel'><h3>Validações e lacunas</h3></div>", unsafe_allow_html=True)
-    if profile.validation_gaps:
-        for gap in profile.validation_gaps:
-            st.warning(gap)
-    else:
-        st.success("Sem lacunas críticas de dados para o screening inicial.")
-
 with compound_tab:
     left, right = st.columns(2)
 
     with left:
-        st.markdown("<div class='panel'><h3>Identidade</h3></div>", unsafe_allow_html=True)
-        identity_df = pd.DataFrame(
-            [{"field": k, "value": v} for k, v in profile.identity.items() if v not in [None, ""]]
-        )
-        st.dataframe(identity_df, width="stretch", hide_index=True)
+        st.markdown("<div class='panel'><h3>Identidade e descritores</h3></div>", unsafe_allow_html=True)
+        identity_rows = []
+        for key, value in profile.identity.items():
+            if value not in [None, ""]:
+                identity_rows.append({"field": key, "value": value})
+        st.dataframe(pd.DataFrame(identity_rows), width="stretch", hide_index=True)
 
         st.markdown("<div class='panel'><h3>Perigos / GHS</h3></div>", unsafe_allow_html=True)
         for hz in profile.hazards:
             st.error(hz)
 
         st.markdown("<div class='panel'><h3>NFPA</h3></div>", unsafe_allow_html=True)
-        nfpa_df = pd.DataFrame([profile.nfpa])
-        st.dataframe(nfpa_df, width="stretch", hide_index=True)
+        st.dataframe(pd.DataFrame([profile.nfpa]), width="stretch", hide_index=True)
 
     with right:
         st.markdown("<div class='panel'><h3>Propriedades físico-químicas</h3></div>", unsafe_allow_html=True)
@@ -227,6 +234,17 @@ with compound_tab:
             for item in notes:
                 st.info(item)
 
+    st.markdown("<div class='panel'><h3>Links oficiais</h3></div>", unsafe_allow_html=True)
+    links = profile.storage.get("official_links", [])
+    link_cols = st.columns(3)
+    for i, item in enumerate(links):
+        with link_cols[i % 3]:
+            st.markdown(
+                f"<div class='source-card'><b>{item['source']}</b><br><span class='small-muted'>{item['purpose']}</span></div>",
+                unsafe_allow_html=True,
+            )
+            st.link_button(f"Abrir {item['source']}", item["url"], width="stretch")
+
 with hazop_tab:
     equipment = st.selectbox(
         "Equipamento / nó",
@@ -240,9 +258,13 @@ with hazop_tab:
         ],
     )
 
-    st.markdown("<div class='panel'><h3>Prioridades de HAZOP orientadas pelo composto</h3></div>", unsafe_allow_html=True)
     priorities = suggest_hazop_priorities(profile, equipment)
+
+    st.markdown("<div class='panel'><h3>Prioridades de HAZOP orientadas pelo composto</h3></div>", unsafe_allow_html=True)
     st.dataframe(pd.DataFrame(priorities), width="stretch", hide_index=True)
+
+    st.markdown("<div class='panel'><h3>Risk matrix dos focos priorizados</h3></div>", unsafe_allow_html=True)
+    st.pyplot(build_risk_matrix_figure(priorities), width="stretch")
 
     st.markdown("<div class='panel'><h3>Worksheet HAZOP base</h3></div>", unsafe_allow_html=True)
     param = st.selectbox("Parâmetro", list(HAZOP_DB.keys()))
@@ -265,8 +287,6 @@ with hazop_tab:
                 }
             )
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
-
-    st.markdown("<div class='note-card'>Na v4, o HAZOP deixa de ser genérico: o composto muda automaticamente a prioridade de desvios, causas e consequências.</div>", unsafe_allow_html=True)
 
 with lopa_tab:
     st.markdown("<div class='panel'><h3>IPLs sugeridas pelo perfil do composto</h3></div>", unsafe_allow_html=True)
@@ -300,12 +320,15 @@ with lopa_tab:
 
     if st.button("Calcular LOPA / SIL", type="primary"):
         chosen = []
+        selected_names = []
         for label in selected:
+            selected_names.append(label)
             for name, pfd in IPL_CATALOG:
                 if name in label:
                     chosen.append((name, pfd))
                     break
         st.session_state.lopa_result = compute_lopa(f_ie, criterion, chosen)
+        st.session_state.selected_ipl_names = selected_names
 
     if st.session_state.lopa_result:
         r = st.session_state.lopa_result
@@ -315,6 +338,15 @@ with lopa_tab:
         c.markdown(metric_card("MCF", f"{r['mcf']:.2e}/ano", "risk-red" if r["ratio"] > 1 else "risk-green"), unsafe_allow_html=True)
         d.markdown(metric_card("SIL", r["sil"], "risk-amber"), unsafe_allow_html=True)
         st.dataframe(pd.DataFrame(r["selected_ipls"], columns=["IPL", "PFD"]), width="stretch", hide_index=True)
+
+        st.markdown("<div class='panel'><h3>IPL stack</h3></div>", unsafe_allow_html=True)
+        st.pyplot(
+            build_ipl_layers_figure(
+                st.session_state.get("selected_ipl_names", []),
+                suggested_ipls,
+            ),
+            width="stretch",
+        )
 
 with consequence_tab:
     st.markdown("<div class='panel'><h3>Roteamento de consequências</h3></div>", unsafe_allow_html=True)
@@ -393,4 +425,6 @@ with refs_tab:
     st.markdown("<div class='panel'><h3>Rastreabilidade de fonte</h3></div>", unsafe_allow_html=True)
     st.dataframe(pd.DataFrame(profile.source_trace), width="stretch", hide_index=True)
 
-    st.markdown("<div class='note-card'>Próximo passo da v4: integrar PubChem + NIST + NIOSH + CAMEO com cache local e score de confiança por propriedade.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='panel'><h3>Links oficiais</h3></div>", unsafe_allow_html=True)
+    for item in profile.storage.get("official_links", []):
+        st.link_button(f"{item['source']} — {item['purpose']}", item["url"], width="stretch")
