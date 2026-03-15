@@ -208,8 +208,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-overview_tab, compound_tab, hazop_tab, lopa_tab, consequence_tab, refs_tab = st.tabs(
-    ["Overview", "Compound", "HAZOP", "LOPA", "Consequências", "Referências"]
+overview_tab, compound_tab, hazop_tab, bowtie_tab, lopa_tab, consequence_tab, refs_tab = st.tabs(
+    ["Overview", "Composto", "HAZOP", "Bow-Tie", "LOPA", "Consequências", "Referências"]
 )
 
 with overview_tab:
