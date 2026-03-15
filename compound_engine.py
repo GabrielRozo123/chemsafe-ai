@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import math
 from typing import Any, Dict, Optional
-
-import requests
 
 from chemicals_seed import LOCAL_COMPOUNDS
 from compound_profile import CompoundProfile, PropertyValue
+from pubchem_client import fetch_pubchem_record
 from references_registry import build_references
+from source_links import build_official_source_links
 
 
 def _normalize(text: str) -> str:
@@ -35,34 +34,6 @@ def resolve_local_compound(query: str) -> Optional[Dict[str, Any]]:
         if q in aliases:
             return item
     return None
-
-
-def fetch_pubchem_identity(query: str) -> Dict[str, Any]:
-    try:
-        q = requests.utils.quote(query)
-        cid_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{q}/cids/JSON"
-        r = requests.get(cid_url, timeout=6)
-        r.raise_for_status()
-        cid = r.json()["IdentifierList"]["CID"][0]
-
-        prop_url = (
-            "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/"
-            f"{cid}/property/Title,IUPACName,MolecularFormula,MolecularWeight/JSON"
-        )
-        pr = requests.get(prop_url, timeout=6)
-        pr.raise_for_status()
-        props = pr.json()["PropertyTable"]["Properties"][0]
-
-        return {
-            "cid": cid,
-            "title": props.get("Title"),
-            "iupac_name": props.get("IUPACName"),
-            "molecular_formula": props.get("MolecularFormula"),
-            "molecular_weight": props.get("MolecularWeight"),
-            "source": "PubChem PUG REST",
-        }
-    except Exception:
-        return {}
 
 
 def _pv(value: Any, unit: str = "", source: str = "", confidence: str = "seed") -> PropertyValue:
@@ -130,12 +101,64 @@ def _score_volatility(seed: Dict[str, Any]) -> float:
     return 1.0
 
 
+def _build_readiness(profile: CompoundProfile) -> list[dict]:
+    checks = []
+
+    checks.append(
+        {
+            "check": "Chemical identity",
+            "status": "OK" if profile.identity.get("cas") and profile.identity.get("formula") else "GAP",
+            "detail": "CAS, formula e molecular weight",
+        }
+    )
+
+    flammable = profile.flags.get("flammable", False)
+    toxic = profile.flags.get("toxic_inhalation", False)
+    corrosive = profile.flags.get("corrosive", False)
+
+    flamm_ok = all(profile.prop(k) is not None for k in ["lfl_volpct", "autoignition_c"]) if flammable else True
+    tox_ok = (profile.limit("IDLH_ppm") is not None or profile.limit("IDLH_mg_m3") is not None) if toxic else True
+    corr_ok = bool(profile.storage.get("incompatibilities")) if corrosive else True
+
+    checks.append(
+        {
+            "check": "Flammability package",
+            "status": "OK" if flamm_ok else "GAP",
+            "detail": "LFL/UFL, flash point, AIT, ignition relevance",
+        }
+    )
+    checks.append(
+        {
+            "check": "Toxicity / exposure package",
+            "status": "OK" if tox_ok else "GAP",
+            "detail": "IDLH, TLV/PEL/STEL/ERPG/AEGL quando aplicável",
+        }
+    )
+    checks.append(
+        {
+            "check": "Reactivity / compatibility",
+            "status": "OK" if corr_ok else "GAP",
+            "detail": "Corrosividade, incompatibilidades e materiais",
+        }
+    )
+
+    checks.append(
+        {
+            "check": "Scenario routing",
+            "status": "OK" if profile.routing else "GAP",
+            "detail": "HAZOP, LOPA e consequence modules priorizados",
+        }
+    )
+
+    return checks
+
+
 def build_compound_profile(query: str) -> Optional[CompoundProfile]:
     seed = resolve_local_compound(query)
     if seed is None:
         return None
 
-    pubchem = fetch_pubchem_identity(seed["identity"]["cas"])
+    pubchem = fetch_pubchem_record(seed["identity"]["cas"] or seed["identity"]["name"])
 
     profile = CompoundProfile()
     profile.identity = {
@@ -146,35 +169,33 @@ def build_compound_profile(query: str) -> Optional[CompoundProfile]:
         "molecular_weight": pubchem.get("molecular_weight", seed["identity"]["molecular_weight"]),
         "pubchem_cid": pubchem.get("cid"),
         "iupac_name": pubchem.get("iupac_name"),
+        "smiles": pubchem.get("canonical_smiles"),
+        "inchikey": pubchem.get("inchikey"),
+        "xlogp": pubchem.get("xlogp"),
+        "tpsa": pubchem.get("tpsa"),
+        "hbd": pubchem.get("hbd"),
+        "hba": pubchem.get("hba"),
+        "complexity": pubchem.get("complexity"),
     }
 
     profile.hazards = list(seed.get("hazards", []))
     profile.nfpa = dict(seed.get("nfpa", {}))
 
     for key, meta in seed.get("physchem", {}).items():
-        profile.physchem[key] = _pv(
-            meta.get("value"),
-            meta.get("unit", ""),
-            meta.get("source", "local_seed"),
-            "seed",
-        )
+        profile.physchem[key] = _pv(meta.get("value"), meta.get("unit", ""), meta.get("source", "local_seed"), "seed")
 
     for key, meta in seed.get("exposure_limits", {}).items():
-        profile.exposure_limits[key] = _pv(
-            meta.get("value"),
-            meta.get("unit", ""),
-            meta.get("source", "local_seed"),
-            "seed",
-        )
+        profile.exposure_limits[key] = _pv(meta.get("value"), meta.get("unit", ""), meta.get("source", "local_seed"), "seed")
 
     profile.reactivity = dict(seed.get("reactivity", {}))
     profile.storage = {
         "incompatibilities": seed.get("reactivity", {}).get("incompatibilities", []),
         "notes": seed.get("reactivity", {}).get("notes", []),
+        "official_links": build_official_source_links(profile),
     }
 
     flammable = bool(profile.prop("flash_point_c") is not None or profile.prop("lfl_volpct") is not None or profile.nfpa.get("fire", 0) >= 3)
-    toxic_inhalation = bool(profile.limit("IDLH_ppm") is not None or profile.limit("IDLH_mg_m3") is not None or any("toxico por inala" in h.lower() or "toxic" in h.lower() for h in profile.hazards))
+    toxic_inhalation = bool(profile.limit("IDLH_ppm") is not None or profile.limit("IDLH_mg_m3") is not None or any("toxic" in h.lower() or "toxico" in h.lower() for h in profile.hazards))
     corrosive = bool(profile.reactivity.get("corrosive"))
     pressurized = bool(profile.reactivity.get("pressurized"))
     reactive_hazard = bool(profile.reactivity.get("reactive_hazard"))
@@ -198,11 +219,11 @@ def build_compound_profile(query: str) -> Optional[CompoundProfile]:
 
     routing = []
     if flammable:
-        routing += ["HAZOP com foco em ignição e perda de contenção", "Pool fire screening", "Ventilação e fontes de ignição"]
+        routing += ["HAZOP: ignição e perda de contenção", "Pool fire screening", "Ventilação e controle de ignição"]
     if toxic_inhalation:
         routing += ["Dispersão tóxica", "Detecção e evacuação", "Isolamento e contenção"]
     if corrosive:
-        routing += ["Materiais de construção", "Integridade mecânica", "Containment / showers / eyewash"]
+        routing += ["Materiais de construção", "Integridade mecânica", "Containment / eyewash / shower"]
     if pressurized:
         routing += ["Relief / sobrepressão / bloqueio", "Isolamento remoto", "Fire case / escalonamento"]
     if reactive_hazard:
@@ -223,13 +244,14 @@ def build_compound_profile(query: str) -> Optional[CompoundProfile]:
     profile.validation_gaps = gaps
 
     profile.source_trace = [
-        {"field": "identity", "source": "PubChem PUG REST" if pubchem else "local_seed"},
-        {"field": "physchem", "source": "local_seed"},
+        {"field": "identity_descriptors", "source": pubchem.get("source", "local_seed")},
+        {"field": "process_safety_physchem", "source": "local_seed"},
         {"field": "exposure_limits", "source": "local_seed"},
-        {"field": "reactivity", "source": "local_seed"},
+        {"field": "reactivity_storage", "source": "local_seed"},
     ]
 
     profile.references = build_references(profile)
+    profile.readiness = _build_readiness(profile)
     return profile
 
 
@@ -242,6 +264,8 @@ def suggest_hazop_priorities(profile: CompoundProfile, equipment: str) -> list[d
                 "priority": "Alta",
                 "focus": "Ignição / atmosfera inflamável",
                 "why": "Flash point, LFL/UFL ou NFPA fire indicam risco relevante de incêndio/explosão.",
+                "severity_score": 4,
+                "likelihood_score": 3,
             }
         )
 
@@ -251,6 +275,8 @@ def suggest_hazop_priorities(profile: CompoundProfile, equipment: str) -> list[d
                 "priority": "Alta",
                 "focus": "Perda de contenção / toxic release",
                 "why": "IDLH e hazard statements sugerem impacto ocupacional/comunitário relevante.",
+                "severity_score": 5,
+                "likelihood_score": 3,
             }
         )
 
@@ -260,6 +286,8 @@ def suggest_hazop_priorities(profile: CompoundProfile, equipment: str) -> list[d
                 "priority": "Alta",
                 "focus": "Sobrepressão / isolamento / alívio",
                 "why": "Serviço pressurizado aumenta relevância de bloqueio, fire case e falha de alívio.",
+                "severity_score": 4,
+                "likelihood_score": 3,
             }
         )
 
@@ -269,6 +297,8 @@ def suggest_hazop_priorities(profile: CompoundProfile, equipment: str) -> list[d
                 "priority": "Média-Alta",
                 "focus": "Integridade mecânica / materiais",
                 "why": "Corrosividade exige olhar para vedação, flange, corrosão e materiais compatíveis.",
+                "severity_score": 4,
+                "likelihood_score": 2,
             }
         )
 
@@ -277,7 +307,9 @@ def suggest_hazop_priorities(profile: CompoundProfile, equipment: str) -> list[d
             {
                 "priority": "Média-Alta",
                 "focus": "Contaminação / incompatibilidade",
-                "why": "Reatividade exige desvio do tipo ALSO AS / OTHER THAN / mistura inadvertida.",
+                "why": "Reatividade exige desvio ALSO AS / OTHER THAN / mistura inadvertida.",
+                "severity_score": 5,
+                "likelihood_score": 2,
             }
         )
 
@@ -287,6 +319,8 @@ def suggest_hazop_priorities(profile: CompoundProfile, equipment: str) -> list[d
                 "priority": "Média",
                 "focus": "Condições operacionais básicas",
                 "why": "Sem sinais dominantes, começar por flow, pressure, level, temperature e composition.",
+                "severity_score": 3,
+                "likelihood_score": 2,
             }
         )
 
