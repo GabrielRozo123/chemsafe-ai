@@ -1,8 +1,4 @@
 from __future__ import annotations
-from bowtie_visual import build_bowtie_figure
-from dense_gas_router import classify_dispersion_mode
-from risk_register import build_risk_register
-from ui_formatters import format_identity_df, format_physchem_df, format_limits_df
 
 import sys
 from pathlib import Path
@@ -14,14 +10,20 @@ if str(ROOT_DIR) not in sys.path:
 import pandas as pd
 import streamlit as st
 
+from bowtie_visual import build_bowtie_custom_figure
+from case_store import list_cases, load_case, save_case
 from chemicals_seed import LOCAL_COMPOUNDS
+from comparator import build_comparison_df, build_comparison_highlights
 from compound_engine import (
     build_compound_profile,
     suggest_hazop_priorities,
     suggest_lopa_ipls,
 )
+from dense_gas_router import classify_dispersion_mode
 from deterministic import IPL_CATALOG, compute_lopa, gaussian_dispersion, pool_fire
 from hazop_db import HAZOP_DB
+from property_status import build_property_status_df, summarize_property_status
+from risk_register import build_risk_register
 from risk_visuals import (
     build_confidence_figure,
     build_hazard_fingerprint_figure,
@@ -30,6 +32,8 @@ from risk_visuals import (
     build_risk_matrix_figure,
     build_source_coverage_figure,
 )
+from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
+
 
 APP_CSS = """
 <style>
@@ -38,50 +42,59 @@ APP_CSS = """
     color: #e9f1ff;
 }
 .block-container {
-    padding-top: 1.2rem;
+    padding-top: 1.0rem;
     padding-bottom: 2rem;
+    max-width: 1450px;
 }
 .hero {
     background: linear-gradient(135deg, #0d2345, #0b1830);
     border: 1px solid #1c3f78;
-    border-radius: 18px;
-    padding: 1.2rem 1.4rem;
+    border-radius: 20px;
+    padding: 1.3rem 1.5rem;
     margin-bottom: 1rem;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.18);
 }
 .hero h1 {
     margin: 0 0 0.35rem 0;
     color: #f4f8ff;
+    font-size: 2rem;
+    font-weight: 800;
 }
 .hero p {
     margin: 0;
     color: #9fc1ff;
+    font-size: 1rem;
 }
 .badge {
     display: inline-block;
-    margin: 0.35rem 0.35rem 0 0;
-    padding: 0.22rem 0.55rem;
+    margin: 0.40rem 0.35rem 0 0;
+    padding: 0.28rem 0.65rem;
     border-radius: 999px;
     border: 1px solid #2b5aa1;
     color: #cfe1ff;
+    background: rgba(31, 74, 139, 0.18);
     font-size: 0.78rem;
 }
 .metric-box {
     background: rgba(10,22,42,0.95);
     border: 1px solid #1d365f;
-    border-radius: 16px;
+    border-radius: 18px;
     padding: 1rem;
-    min-height: 112px;
+    min-height: 118px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.12);
 }
 .metric-label {
     color: #7ea8ea;
     font-size: 0.78rem;
     text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 .metric-value {
     color: white;
     font-size: 1.55rem;
-    font-weight: 700;
+    font-weight: 800;
     margin-top: 0.45rem;
+    line-height: 1.1;
 }
 .risk-blue { color: #62a8ff; }
 .risk-green { color: #34d399; }
@@ -89,14 +102,19 @@ APP_CSS = """
 .risk-red { color: #fb7185; }
 
 .panel {
-    background: rgba(9,17,31,0.92);
+    background: rgba(9,17,31,0.94);
     border: 1px solid #1d365f;
-    border-radius: 16px;
-    padding: 1rem;
-    margin-bottom: 0.8rem;
+    border-radius: 18px;
+    padding: 1rem 1rem 0.95rem 1rem;
+    margin-bottom: 0.9rem;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.10);
 }
 .panel h3 {
     margin-top: 0;
+    margin-bottom: 0.8rem;
+    color: #f0f6ff;
+    font-size: 1rem;
+    font-weight: 800;
 }
 .small-muted {
     color: #9ab2d8;
@@ -107,6 +125,7 @@ APP_CSS = """
     border-left: 4px solid #4b88ff;
     border-radius: 12px;
     padding: 0.9rem 1rem;
+    color: #e9f1ff;
 }
 .source-card {
     background: rgba(12, 24, 43, 0.95);
@@ -116,13 +135,28 @@ APP_CSS = """
     height: 100%;
 }
 .section-title {
-    font-size: 1.02rem;
-    font-weight: 700;
+    font-size: 1.03rem;
+    font-weight: 800;
     color: #d9e8ff;
     margin-bottom: 0.45rem;
 }
+.kpi-chip {
+    display: inline-block;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid #2b5aa1;
+    margin-right: 0.45rem;
+    margin-bottom: 0.35rem;
+    color: #d9e8ff;
+    background: rgba(31, 74, 139, 0.14);
+    font-size: 0.78rem;
+}
+.divider-space {
+    height: 0.25rem;
+}
 </style>
 """
+
 
 st.set_page_config(
     page_title="ChemSafe Pro Deterministic",
@@ -132,10 +166,20 @@ st.set_page_config(
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
+
+# =========================
+# Estado da sessão
+# =========================
+DEFAULT_COMPOUND_KEY = "ammonia"
+
 if "selected_compound_key" not in st.session_state:
-    st.session_state.selected_compound_key = "ammonia"
+    st.session_state.selected_compound_key = DEFAULT_COMPOUND_KEY
 if "profile" not in st.session_state:
     st.session_state.profile = None
+if "compare_profile" not in st.session_state:
+    st.session_state.compare_profile = None
+if "compare_query" not in st.session_state:
+    st.session_state.compare_query = ""
 if "lopa_result" not in st.session_state:
     st.session_state.lopa_result = None
 if "dispersion_result" not in st.session_state:
@@ -144,10 +188,24 @@ if "pool_fire_result" not in st.session_state:
     st.session_state.pool_fire_result = None
 if "selected_ipl_names" not in st.session_state:
     st.session_state.selected_ipl_names = []
+if "current_case_name" not in st.session_state:
+    st.session_state.current_case_name = ""
+if "current_case_notes" not in st.session_state:
+    st.session_state.current_case_notes = ""
+if "bowtie_initialized_for" not in st.session_state:
+    st.session_state.bowtie_initialized_for = ""
 
 
+# =========================
+# Helpers
+# =========================
 def metric_card(label: str, value: str, klass: str = "risk-blue") -> str:
-    return f"<div class='metric-box'><div class='metric-label'>{label}</div><div class='metric-value {klass}'>{value}</div></div>"
+    return (
+        f"<div class='metric-box'>"
+        f"<div class='metric-label'>{label}</div>"
+        f"<div class='metric-value {klass}'>{value}</div>"
+        f"</div>"
+    )
 
 
 def quick_compounds():
@@ -161,9 +219,110 @@ def load_profile_from_key(key: str) -> None:
     st.session_state.profile = profile
 
 
+def load_profile_from_query(query: str) -> None:
+    profile = build_compound_profile(query)
+    if profile is not None:
+        st.session_state.profile = profile
+
+
+def _default_bowtie_lists(profile):
+    threats = []
+    barriers_pre = []
+    consequences = []
+    barriers_mit = []
+
+    if profile.flags.get("flammable"):
+        threats += ["Fonte de ignição", "Vazamento", "Ventilação insuficiente"]
+        barriers_pre += ["Controle de ignição", "Detecção", "Aterramento"]
+        consequences += ["Incêndio", "Flash fire", "Dano à instalação"]
+        barriers_mit += ["Combate a incêndio", "Contenção", "Plano de emergência"]
+
+    if profile.flags.get("toxic_inhalation"):
+        threats += ["Falha de vedação", "Abertura indevida", "Sobrepressão"]
+        barriers_pre += ["Isolamento", "ESD", "Inspeção"]
+        consequences += ["Exposição ocupacional", "Evacuação", "Impacto comunitário"]
+        barriers_mit += ["Alarme", "Evacuação", "Abatimento / ventilação"]
+
+    if profile.flags.get("corrosive"):
+        threats += ["Corrosão", "Material incompatível"]
+        barriers_pre += ["Seleção de materiais", "Inspeção de integridade"]
+        consequences += ["Perda de contenção", "Dano a equipamento"]
+        barriers_mit += ["Chuveiro / lava-olhos", "Containment"]
+
+    threats = list(dict.fromkeys(threats))[:5]
+    barriers_pre = list(dict.fromkeys(barriers_pre))[:5]
+    consequences = list(dict.fromkeys(consequences))[:5]
+    barriers_mit = list(dict.fromkeys(barriers_mit))[:5]
+
+    if not threats:
+        threats = ["Desvio operacional", "Falha de válvula", "Falha de instrumentação"]
+    if not barriers_pre:
+        barriers_pre = ["Procedimento operacional", "Inspeção", "Alarme"]
+    if not consequences:
+        consequences = ["Perda de contenção", "Parada de processo", "Exposição ocupacional"]
+    if not barriers_mit:
+        barriers_mit = ["Evacuação", "Resposta à emergência", "Containment"]
+
+    return {
+        "threats": threats,
+        "barriers_pre": barriers_pre,
+        "top_event": "Perda de contenção / perda de controle",
+        "barriers_mit": barriers_mit,
+        "consequences": consequences,
+    }
+
+
+def ensure_bowtie_state(profile):
+    compound_marker = profile.identity.get("name", "")
+    if st.session_state.bowtie_initialized_for != compound_marker:
+        defaults = _default_bowtie_lists(profile)
+        st.session_state.bowtie_threats = "\n".join(defaults["threats"])
+        st.session_state.bowtie_pre = "\n".join(defaults["barriers_pre"])
+        st.session_state.bowtie_top = defaults["top_event"]
+        st.session_state.bowtie_mit = "\n".join(defaults["barriers_mit"])
+        st.session_state.bowtie_cons = "\n".join(defaults["consequences"])
+        st.session_state.bowtie_initialized_for = compound_marker
+
+
+def bowtie_payload():
+    return {
+        "threats": [x.strip() for x in st.session_state.get("bowtie_threats", "").splitlines() if x.strip()],
+        "barriers_pre": [x.strip() for x in st.session_state.get("bowtie_pre", "").splitlines() if x.strip()],
+        "top_event": st.session_state.get("bowtie_top", "Perda de contenção / perda de controle"),
+        "barriers_mit": [x.strip() for x in st.session_state.get("bowtie_mit", "").splitlines() if x.strip()],
+        "consequences": [x.strip() for x in st.session_state.get("bowtie_cons", "").splitlines() if x.strip()],
+    }
+
+
+def apply_loaded_case(case_data: dict):
+    query_hint = case_data.get("query_hint") or case_data.get("compound_name")
+    if query_hint:
+        profile = build_compound_profile(query_hint)
+        if profile is not None:
+            st.session_state.profile = profile
+
+    st.session_state.current_case_name = case_data.get("case_name", "")
+    st.session_state.current_case_notes = case_data.get("notes", "")
+    st.session_state.selected_ipl_names = case_data.get("selected_ipl_names", [])
+    st.session_state.lopa_result = case_data.get("lopa_result")
+
+    bowtie = case_data.get("bowtie", {})
+    if bowtie:
+        st.session_state.bowtie_threats = "\n".join(bowtie.get("threats", []))
+        st.session_state.bowtie_pre = "\n".join(bowtie.get("barriers_pre", []))
+        st.session_state.bowtie_top = bowtie.get("top_event", "Perda de contenção / perda de controle")
+        st.session_state.bowtie_mit = "\n".join(bowtie.get("barriers_mit", []))
+        st.session_state.bowtie_cons = "\n".join(bowtie.get("consequences", []))
+        if st.session_state.profile is not None:
+            st.session_state.bowtie_initialized_for = st.session_state.profile.identity.get("name", "")
+
+
+# =========================
+# Sidebar
+# =========================
 with st.sidebar:
-    st.markdown("## ⚗️ ChemSafe Pro Deterministic")
-    st.caption("Property-aware process safety screening")
+    st.markdown("## ⚗️ ChemSafe Pro")
+    st.caption("Plataforma determinística de segurança de processo")
     st.markdown("---")
 
     st.write("**Acesso rápido**")
@@ -177,114 +336,139 @@ with st.sidebar:
         if manual_query.strip():
             profile = build_compound_profile(manual_query.strip())
             if profile is None:
-                st.warning("Composto não encontrado nem na base local nem no fallback do PubChem.")
+                st.warning("Composto não encontrado nem nas bases consultadas.")
             else:
                 st.session_state.profile = profile
 
     st.markdown("---")
     st.write("**Meta do produto**")
-    st.caption("Perfil canônico → HAZOP → LOPA → Consequências → Referências")
+    st.caption("PSI + HAZOP + LOPA + Consequências + Referências")
+    st.markdown("---")
 
+    saved_cases = list_cases()
+    if saved_cases:
+        st.write("**Casos salvos**")
+        for item in saved_cases[:6]:
+            st.caption(f"• {item['case_name']}")
+
+# Inicialização
 if st.session_state.profile is None:
     load_profile_from_key(st.session_state.selected_compound_key)
 
 profile = st.session_state.profile
+ensure_bowtie_state(profile)
 
+# =========================
+# Hero
+# =========================
 st.markdown(
     """
     <div class="hero">
       <h1>ChemSafe Pro Deterministic</h1>
       <p>Segurança de processo guiada por propriedades reais, referências oficiais e lógica de decisão transparente.</p>
       <div>
-        <span class="badge">compound profile</span>
-        <span class="badge">hazard fingerprint</span>
-        <span class="badge">risk matrix</span>
-        <span class="badge">IPL stack</span>
-        <span class="badge">incompatibility matrix</span>
-        <span class="badge">confidence score</span>
+        <span class="badge">Busca universal</span>
+        <span class="badge">Pacote curado + ao vivo</span>
+        <span class="badge">HAZOP orientado por propriedades</span>
+        <span class="badge">LOPA assistida</span>
+        <span class="badge">Bow-Tie editável</span>
+        <span class="badge">Casos persistentes</span>
       </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-overview_tab, compound_tab, hazop_tab, bowtie_tab, lopa_tab, consequence_tab, refs_tab = st.tabs(
-    ["Overview", "Composto", "HAZOP", "Bow-Tie", "LOPA", "Consequências", "Referências"]
+# =========================
+# Tabs
+# =========================
+overview_tab, compound_tab, compare_tab, hazop_tab, bowtie_tab, lopa_tab, consequence_tab, refs_tab, cases_tab = st.tabs(
+    ["Overview", "Composto", "Comparador", "HAZOP", "Bow-Tie", "LOPA", "Consequências", "Referências", "Casos"]
 )
-dispersion_mode = classify_dispersion_mode(profile)
-with overview_tab:
-    c1, c2, c3, c4, c5 = st.columns(5)
-c1.markdown(metric_card("Composto", profile.identity.get("name", "—")), unsafe_allow_html=True)
-c2.markdown(metric_card("CAS", profile.identity.get("cas", "—")), unsafe_allow_html=True)
-c3.markdown(metric_card("Rotas priorizadas", str(len(profile.routing))), unsafe_allow_html=True)
-c4.markdown(
-    metric_card(
-        "Confiança",
-        f"{profile.confidence_score:.0f}/100",
-        "risk-green" if profile.confidence_score >= 80 else "risk-amber" if profile.confidence_score >= 50 else "risk-red",
-    ),
-    unsafe_allow_html=True,
-)
-c5.markdown(metric_card("Modo de dispersão", dispersion_mode["label"]), unsafe_allow_html=True)
-    a, b = st.columns(2)
-    with a:
-        st.markdown("<div class='panel'><h3>Hazard fingerprint</h3></div>", unsafe_allow_html=True)
-        st.pyplot(build_hazard_fingerprint_figure(profile), width="stretch")
-    with b:
-        st.markdown("<div class='panel'><h3>Confiança do pacote de dados</h3></div>", unsafe_allow_html=True)
-        st.pyplot(build_confidence_figure(profile), width="stretch")
 
-    a, b = st.columns(2)
-    with a:
+# =========================
+# OVERVIEW
+# =========================
+with overview_tab:
+    dispersion_mode = classify_dispersion_mode(profile)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.markdown(metric_card("Composto", profile.identity.get("name", "—")), unsafe_allow_html=True)
+    c2.markdown(metric_card("CAS", profile.identity.get("cas", "—")), unsafe_allow_html=True)
+    c3.markdown(metric_card("Rotas priorizadas", str(len(profile.routing))), unsafe_allow_html=True)
+    c4.markdown(
+        metric_card(
+            "Confiança",
+            f"{profile.confidence_score:.0f}/100",
+            "risk-green" if profile.confidence_score >= 80 else "risk-amber" if profile.confidence_score >= 50 else "risk-red",
+        ),
+        unsafe_allow_html=True,
+    )
+    c5.markdown(metric_card("Modo de dispersão", dispersion_mode["label"]), unsafe_allow_html=True)
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("<div class='panel'><h3>Hazard fingerprint</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_hazard_fingerprint_figure(profile), clear_figure=True)
+    with right:
+        st.markdown("<div class='panel'><h3>Confiança do pacote de dados</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_confidence_figure(profile), clear_figure=True)
+
+    left, right = st.columns(2)
+    with left:
         st.markdown("<div class='panel'><h3>Cobertura de fontes</h3></div>", unsafe_allow_html=True)
-        st.pyplot(build_source_coverage_figure(profile), width="stretch")
-    with b:
+        st.pyplot(build_source_coverage_figure(profile), clear_figure=True)
+    with right:
         st.markdown("<div class='panel'><h3>Readiness para screening</h3></div>", unsafe_allow_html=True)
         st.dataframe(pd.DataFrame(profile.readiness), width="stretch", hide_index=True)
 
+    st.markdown("<div class='panel'><h3>Status do pacote de propriedades</h3></div>", unsafe_allow_html=True)
+    status_summary = summarize_property_status(profile)
+    chips = []
+    for k, v in status_summary.items():
+        chips.append(f"<span class='kpi-chip'>{k}: {v}</span>")
+    st.markdown("".join(chips), unsafe_allow_html=True)
+    st.dataframe(build_property_status_df(profile), width="stretch", hide_index=True)
+
     st.markdown("<div class='panel'><h3>Roteamento automático</h3></div>", unsafe_allow_html=True)
-    if profile.routing:
-        for item in profile.routing:
-            st.success(item)
-    else:
-        st.info("Nenhuma rota dominante identificada.")
+    for item in profile.routing:
+        st.success(item)
 
     if profile.validation_gaps:
         st.markdown("<div class='panel'><h3>Lacunas de dados</h3></div>", unsafe_allow_html=True)
         for gap in profile.validation_gaps:
             st.warning(gap)
 
+# =========================
+# COMPOSTO
+# =========================
 with compound_tab:
     left, right = st.columns(2)
 
     with left:
         st.markdown("<div class='panel'><h3>Identidade e descritores</h3></div>", unsafe_allow_html=True)
-        identity_rows = []
-        for key, value in profile.identity.items():
-            if value not in [None, ""]:
-                identity_rows.append({"field": key, "value": value})
-        st.dataframe(pd.DataFrame(identity_rows), width="stretch", hide_index=True)
+        st.dataframe(format_identity_df(profile), width="stretch", hide_index=True)
 
         st.markdown("<div class='panel'><h3>Perigos / GHS</h3></div>", unsafe_allow_html=True)
         if profile.hazards:
             for hz in profile.hazards:
                 st.error(hz)
         else:
-            st.info("Sem hazards locais cadastrados para este composto.")
+            st.info("Sem hazards estruturados para este composto.")
 
         st.markdown("<div class='panel'><h3>NFPA</h3></div>", unsafe_allow_html=True)
         st.dataframe(pd.DataFrame([profile.nfpa]), width="stretch", hide_index=True)
 
     with right:
         st.markdown("<div class='panel'><h3>Propriedades físico-químicas</h3></div>", unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame(profile.to_flat_physchem()), width="stretch", hide_index=True)
+        st.dataframe(format_physchem_df(profile), width="stretch", hide_index=True)
 
         st.markdown("<div class='panel'><h3>Limites de exposição</h3></div>", unsafe_allow_html=True)
-        limits = profile.to_flat_limits()
-        if limits:
-            st.dataframe(pd.DataFrame(limits), width="stretch", hide_index=True)
+        limits_df = format_limits_df(profile)
+        if not limits_df.empty:
+            st.dataframe(limits_df, width="stretch", hide_index=True)
         else:
-            st.info("Sem limites locais cadastrados para este composto.")
+            st.info("Sem limites estruturados para este composto.")
 
         st.markdown("<div class='panel'><h3>Incompatibilidades / armazenamento</h3></div>", unsafe_allow_html=True)
         incompat = profile.storage.get("incompatibilities", [])
@@ -293,13 +477,13 @@ with compound_tab:
             for item in incompat:
                 st.warning(item)
         else:
-            st.info("Sem incompatibilidades locais estruturadas.")
+            st.info("Sem incompatibilidades estruturadas.")
         if notes:
             for item in notes:
                 st.info(item)
 
-    st.markdown("<div class='panel'><h3>Matriz de incompatibilidade</h3></div>", unsafe_allow_html=True)
-    st.pyplot(build_incompatibility_matrix_figure(profile), width="stretch")
+    st.markdown("<div class='panel'><h3>Matriz de compatibilidade</h3></div>", unsafe_allow_html=True)
+    st.pyplot(build_incompatibility_matrix_figure(profile), clear_figure=True)
 
     st.markdown("<div class='panel'><h3>Links oficiais</h3></div>", unsafe_allow_html=True)
     links = profile.storage.get("official_links", [])
@@ -312,6 +496,36 @@ with compound_tab:
             )
             st.link_button(f"Abrir {item['source']}", item["url"], width="stretch")
 
+# =========================
+# COMPARADOR
+# =========================
+with compare_tab:
+    st.markdown("<div class='panel'><h3>Comparador entre compostos</h3></div>", unsafe_allow_html=True)
+
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        st.session_state.compare_query = st.text_input(
+            "Segundo composto para comparação",
+            value=st.session_state.compare_query,
+            placeholder="Ex.: propane, propano, 74-98-6, C3H8",
+        )
+    with c2:
+        if st.button("Comparar", type="primary", width="stretch"):
+            if st.session_state.compare_query.strip():
+                st.session_state.compare_profile = build_compound_profile(st.session_state.compare_query.strip())
+
+    compare_profile = st.session_state.compare_profile
+    if compare_profile is not None:
+        st.dataframe(build_comparison_df(profile, compare_profile), width="stretch", hide_index=True)
+        st.markdown("<div class='panel'><h3>Leitura rápida da comparação</h3></div>", unsafe_allow_html=True)
+        for line in build_comparison_highlights(profile, compare_profile):
+            st.info(line)
+    else:
+        st.info("Carregue um segundo composto para comparar propriedades e riscos.")
+
+# =========================
+# HAZOP
+# =========================
 with hazop_tab:
     equipment = st.selectbox(
         "Equipamento / nó",
@@ -326,12 +540,21 @@ with hazop_tab:
     )
 
     priorities = suggest_hazop_priorities(profile, equipment)
+    risk_register_df = build_risk_register(
+        profile=profile,
+        hazop_priorities=priorities,
+        lopa_result=st.session_state.get("lopa_result"),
+        dispersion_mode=classify_dispersion_mode(profile),
+    )
 
     st.markdown("<div class='panel'><h3>Prioridades de HAZOP orientadas pelo composto</h3></div>", unsafe_allow_html=True)
     st.dataframe(pd.DataFrame(priorities), width="stretch", hide_index=True)
 
-    st.markdown("<div class='panel'><h3>Risk matrix dos focos priorizados</h3></div>", unsafe_allow_html=True)
-    st.pyplot(build_risk_matrix_figure(priorities), width="stretch")
+    st.markdown("<div class='panel'><h3>Matriz de risco dos focos priorizados</h3></div>", unsafe_allow_html=True)
+    st.pyplot(build_risk_matrix_figure(priorities), clear_figure=True)
+
+    st.markdown("<div class='panel'><h3>Registro inicial de riscos</h3></div>", unsafe_allow_html=True)
+    st.dataframe(risk_register_df, width="stretch", hide_index=True)
 
     st.markdown("<div class='panel'><h3>Worksheet HAZOP base</h3></div>", unsafe_allow_html=True)
     param = st.selectbox("Parâmetro", list(HAZOP_DB.keys()))
@@ -346,20 +569,50 @@ with hazop_tab:
         for i, cause in enumerate(causes):
             rows.append(
                 {
-                    "desvio": f"{guideword} {param}" if i == 0 else "idem",
-                    "causa": cause,
-                    "consequência": cons[i] if i < len(cons) else (cons[0] if cons else "—"),
-                    "salvaguarda": sav[i] if i < len(sav) else (sav[0] if sav else "—"),
-                    "recomendação": rec[i] if i < len(rec) else (rec[0] if rec else "—"),
+                    "Desvio": f"{guideword} {param}" if i == 0 else "idem",
+                    "Causa": cause,
+                    "Consequência": cons[i] if i < len(cons) else (cons[0] if cons else "—"),
+                    "Salvaguarda": sav[i] if i < len(sav) else (sav[0] if sav else "—"),
+                    "Recomendação": rec[i] if i < len(rec) else (rec[0] if rec else "—"),
                 }
             )
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
+# =========================
+# BOW-TIE
+# =========================
+with bowtie_tab:
+    st.markdown("<div class='panel'><h3>Bow-Tie editável do caso</h3></div>", unsafe_allow_html=True)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.text_area("Ameaças (uma por linha)", key="bowtie_threats", height=140)
+        st.text_area("Barreiras preventivas (uma por linha)", key="bowtie_pre", height=140)
+    with c2:
+        st.text_input("Top Event", key="bowtie_top")
+        st.text_area("Barreiras mitigadoras (uma por linha)", key="bowtie_mit", height=140)
+        st.text_area("Consequências (uma por linha)", key="bowtie_cons", height=140)
+
+    bt = bowtie_payload()
+    st.pyplot(
+        build_bowtie_custom_figure(
+            threats=bt["threats"],
+            barriers_pre=bt["barriers_pre"],
+            top_event=bt["top_event"],
+            barriers_mit=bt["barriers_mit"],
+            consequences=bt["consequences"],
+        ),
+        clear_figure=True,
+    )
+
     st.markdown(
-        "<div class='note-card'>Nesta versão, o HAZOP deixa de ser apenas uma checklist: o composto altera o peso relativo de ignição, toxic release, sobrepressão, corrosão e incompatibilidade.</div>",
+        "<div class='note-card'>Edite livremente o Bow-Tie para o caso atual. Esse conteúdo também pode ser salvo junto com o caso.</div>",
         unsafe_allow_html=True,
     )
 
+# =========================
+# LOPA
+# =========================
 with lopa_tab:
     st.markdown("<div class='panel'><h3>IPLs sugeridas pelo perfil do composto</h3></div>", unsafe_allow_html=True)
     suggested_ipls = suggest_lopa_ipls(profile)
@@ -415,12 +668,20 @@ with lopa_tab:
 
         st.dataframe(pd.DataFrame(r["selected_ipls"], columns=["IPL", "PFD"]), width="stretch", hide_index=True)
 
-        st.markdown("<div class='panel'><h3>IPL stack</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='panel'><h3>Panorama das camadas de proteção</h3></div>", unsafe_allow_html=True)
         selected_names = st.session_state.get("selected_ipl_names", [])
-        st.pyplot(build_ipl_layers_figure(selected_names, suggested_ipls), width="stretch")
+        st.pyplot(build_ipl_layers_figure(selected_names, suggested_ipls), clear_figure=True)
 
+# =========================
+# CONSEQUÊNCIAS
+# =========================
 with consequence_tab:
-    st.markdown("<div class='panel'><h3>Roteamento de consequências</h3></div>", unsafe_allow_html=True)
+    dispersion_mode = classify_dispersion_mode(profile)
+    st.markdown(
+        f"<div class='note-card'><b>Modo sugerido de dispersão:</b> {dispersion_mode['label']}<br>{'; '.join(dispersion_mode['reasons'])}</div>",
+        unsafe_allow_html=True,
+    )
+
     for item in profile.routing:
         st.info(item)
 
@@ -438,7 +699,7 @@ with consequence_tab:
 
             d1, d2, d3 = st.columns(3)
             default_idlh = profile.limit("IDLH_ppm", 300.0)
-            idlh_ppm = d1.number_input("IDLH (ppm)", value=float(default_idlh), min_value=0.001)
+            idlh_ppm = d1.number_input("IDLH (ppm)", value=float(default_idlh or 300.0), min_value=0.001)
             mw = d2.number_input("PM do gás", value=float(profile.identity.get("molecular_weight", 20.0) or 20.0), min_value=1.0)
             h = d3.number_input("Altura da fonte (m)", value=0.0, min_value=0.0)
 
@@ -450,15 +711,15 @@ with consequence_tab:
                 st.dataframe(
                     pd.DataFrame(
                         [
-                            {"item": "Distância até IDLH", "value": f"{r['x_idlh']} m" if r["x_idlh"] else "> 3 km"},
-                            {"item": "Concentração @100 m", "value": f"{r['c_at_100m']:.4f} g/m³"},
+                            {"Item": "Distância até IDLH", "Valor": f"{r['x_idlh']} m" if r["x_idlh"] else "> 3 km"},
+                            {"Item": "Concentração a 100 m", "Valor": f"{r['c_at_100m']:.4f} g/m³"},
                         ]
                     ),
                     width="stretch",
                     hide_index=True,
                 )
         else:
-            st.info("O perfil do composto não sugere toxic screening dominante neste momento.")
+            st.info("O perfil do composto não sugere screening tóxico dominante neste momento.")
 
     with fire_tab:
         if fire_ok:
@@ -477,10 +738,10 @@ with consequence_tab:
                 st.dataframe(
                     pd.DataFrame(
                         [
-                            {"item": "Altura da chama", "value": f"{r['Hf_m']:.1f} m"},
-                            {"item": "Poder emissivo", "value": f"{r['E_kW_m2']:.1f} kW/m²"},
-                            {"item": "Fluxo no alvo", "value": f"{r['q_kW_m2']:.2f} kW/m²"},
-                            {"item": "Zona", "value": r["zone"]},
+                            {"Item": "Altura da chama", "Valor": f"{r['Hf_m']:.1f} m"},
+                            {"Item": "Poder emissivo", "Valor": f"{r['E_kW_m2']:.1f} kW/m²"},
+                            {"Item": "Fluxo no alvo", "Valor": f"{r['q_kW_m2']:.2f} kW/m²"},
+                            {"Item": "Zona", "Valor": r["zone"]},
                         ]
                     ),
                     width="stretch",
@@ -489,6 +750,9 @@ with consequence_tab:
         else:
             st.info("O perfil do composto não sugere pool fire dominante neste momento.")
 
+# =========================
+# REFERÊNCIAS
+# =========================
 with refs_tab:
     st.markdown("<div class='panel'><h3>Referências do caso</h3></div>", unsafe_allow_html=True)
     st.dataframe(pd.DataFrame(profile.references), width="stretch", hide_index=True)
@@ -499,3 +763,47 @@ with refs_tab:
     st.markdown("<div class='panel'><h3>Links oficiais</h3></div>", unsafe_allow_html=True)
     for item in profile.storage.get("official_links", []):
         st.link_button(f"{item['source']} — {item['purpose']}", item["url"], width="stretch")
+
+# =========================
+# CASOS
+# =========================
+with cases_tab:
+    st.markdown("<div class='panel'><h3>Salvar e carregar casos</h3></div>", unsafe_allow_html=True)
+
+    c1, c2 = st.columns([2, 3])
+    with c1:
+        case_name = st.text_input("Nome do caso", value=st.session_state.current_case_name or profile.identity.get("name", "Caso sem nome"))
+    with c2:
+        case_notes = st.text_area("Notas do caso", value=st.session_state.current_case_notes, height=100)
+
+    col_save, col_load = st.columns([1, 1])
+
+    with col_save:
+        if st.button("Salvar caso", type="primary", width="stretch"):
+            save_case(
+                case_name=case_name,
+                profile=profile,
+                notes=case_notes,
+                lopa_result=st.session_state.get("lopa_result"),
+                selected_ipl_names=st.session_state.get("selected_ipl_names", []),
+                bowtie=bowtie_payload(),
+            )
+            st.session_state.current_case_name = case_name
+            st.session_state.current_case_notes = case_notes
+            st.success("Caso salvo com sucesso.")
+
+    cases = list_cases()
+    if cases:
+        case_options = [c["case_name"] for c in cases]
+        selected_case = col_load.selectbox("Casos disponíveis", case_options)
+        if col_load.button("Carregar caso", width="stretch"):
+            loaded = load_case(selected_case)
+            if loaded:
+                apply_loaded_case(loaded)
+                st.success("Caso carregado.")
+                st.rerun()
+
+        st.markdown("<div class='panel'><h3>Resumo dos casos salvos</h3></div>", unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(cases), width="stretch", hide_index=True)
+    else:
+        st.info("Nenhum caso salvo ainda.")
