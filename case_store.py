@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import json
+import re
+from datetime import datetime
+from pathlib import Path
+
+
+CASE_DIR = Path(".chemsafe_cases")
+CASE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _slug(text: str) -> str:
+    text = (text or "").strip().lower()
+    text = re.sub(r"[^a-z0-9áàâãéêíóôõúç_-]+", "-", text)
+    text = re.sub(r"-+", "-", text).strip("-")
+    return text or "caso"
+
+
+def _case_path(case_name: str) -> Path:
+    return CASE_DIR / f"{_slug(case_name)}.json"
+
+
+def save_case(
+    case_name: str,
+    profile,
+    notes: str = "",
+    lopa_result: dict | None = None,
+    selected_ipl_names: list[str] | None = None,
+    bowtie: dict | None = None,
+):
+    payload = {
+        "case_name": case_name,
+        "saved_at": datetime.utcnow().isoformat() + "Z",
+        "compound_name": profile.identity.get("name", ""),
+        "query_hint": profile.identity.get("cas") or profile.identity.get("preferred_name") or profile.identity.get("name"),
+        "notes": notes,
+        "selected_ipl_names": selected_ipl_names or [],
+        "lopa_result": lopa_result,
+        "bowtie": bowtie or {},
+        "routing": profile.routing,
+        "confidence_score": profile.confidence_score,
+    }
+    _case_path(case_name).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def list_cases() -> list[dict]:
+    rows = []
+    for path in sorted(CASE_DIR.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            rows.append(
+                {
+                    "case_name": data.get("case_name", path.stem),
+                    "compound_name": data.get("compound_name", ""),
+                    "saved_at": data.get("saved_at", ""),
+                    "confidence_score": data.get("confidence_score", ""),
+                }
+            )
+        except Exception:
+            continue
+
+    rows.sort(key=lambda x: x.get("saved_at", ""), reverse=True)
+    return rows
+
+
+def load_case(case_name: str) -> dict | None:
+    path = _case_path(case_name)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
