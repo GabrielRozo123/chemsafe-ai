@@ -24,20 +24,106 @@ def _normalize(text: str) -> str:
         .replace("õ", "o")
         .replace("ú", "u")
         .replace("ç", "c")
+        .replace(" ", "")
+        .replace("-", "")
     )
+
+
+def _pv(value: Any, unit: str = "", source: str = "", confidence: str = "seed") -> PropertyValue:
+    return PropertyValue(value=value, unit=unit, source=source, confidence=confidence)
 
 
 def resolve_local_compound(query: str) -> Optional[Dict[str, Any]]:
     q = _normalize(query)
     for _, item in LOCAL_COMPOUNDS.items():
         aliases = [_normalize(a) for a in item.get("aliases", [])]
-        if q in aliases:
+        identity = item.get("identity", {})
+        candidates = aliases + [
+            _normalize(identity.get("name", "")),
+            _normalize(identity.get("preferred_name", "")),
+            _normalize(identity.get("cas", "")),
+            _normalize(identity.get("formula", "")),
+        ]
+        if q in candidates:
             return item
     return None
 
 
-def _pv(value: Any, unit: str = "", source: str = "", confidence: str = "seed") -> PropertyValue:
-    return PropertyValue(value=value, unit=unit, source=source, confidence=confidence)
+def _generic_profile_from_pubchem(query: str, pubchem: Dict[str, Any]) -> Optional[CompoundProfile]:
+    if not pubchem:
+        return None
+
+    profile = CompoundProfile()
+    profile.identity = {
+        "name": pubchem.get("title") or query.title(),
+        "preferred_name": pubchem.get("title") or query.title(),
+        "cas": "",
+        "formula": pubchem.get("molecular_formula"),
+        "molecular_weight": pubchem.get("molecular_weight"),
+        "pubchem_cid": pubchem.get("cid"),
+        "iupac_name": pubchem.get("iupac_name"),
+        "smiles": pubchem.get("canonical_smiles"),
+        "inchikey": pubchem.get("inchikey"),
+        "xlogp": pubchem.get("xlogp"),
+        "tpsa": pubchem.get("tpsa"),
+        "hbd": pubchem.get("hbd"),
+        "hba": pubchem.get("hba"),
+        "complexity": pubchem.get("complexity"),
+    }
+
+    profile.hazards = []
+    profile.nfpa = {"health": 0, "fire": 0, "reactivity": 0, "special": ""}
+
+    if pubchem.get("xlogp") is not None:
+        profile.physchem["xlogp"] = _pv(pubchem["xlogp"], "", "PubChem", "live")
+    if pubchem.get("molecular_weight") is not None:
+        profile.physchem["molecular_weight"] = _pv(pubchem["molecular_weight"], "g/mol", "PubChem", "live")
+
+    profile.reactivity = {
+        "corrosive": False,
+        "pressurized": False,
+        "reactive_hazard": False,
+        "incompatibilities": [],
+        "notes": [
+            "Perfil genérico gerado a partir do PubChem.",
+            "Completar com dados de inflamabilidade, toxicidade e compatibilidade antes de um screening mais forte.",
+        ],
+    }
+    profile.storage = {
+        "incompatibilities": [],
+        "notes": profile.reactivity["notes"],
+    }
+
+    profile.flags = {
+        "flammable": False,
+        "toxic_inhalation": False,
+        "corrosive": False,
+        "pressurized": False,
+        "reactive_hazard": False,
+    }
+
+    profile.fingerprint = {
+        "flammability": 0.5,
+        "toxicity": 0.5,
+        "pressure": 0.5,
+        "corrosivity": 0.5,
+        "reactivity": 0.5,
+        "volatility": 0.5,
+    }
+
+    profile.routing = ["Buscar dados complementares antes do HAZOP detalhado"]
+    profile.validation_gaps = [
+        "Composto encontrado via PubChem, mas sem pacote local de process safety.",
+        "Adicionar LFL/UFL, flash point, AIT, IDLH/limites de exposição e incompatibilidades.",
+    ]
+    profile.source_trace = [{"field": "identity_descriptors", "source": "PubChem PUG REST"}]
+    profile.references = build_references(profile)
+    profile.storage["official_links"] = build_official_source_links(profile)
+    profile.readiness = [
+        {"check": "Chemical identity", "status": "OK", "detail": "Dados básicos de identidade encontrados via PubChem"},
+        {"check": "Process safety package", "status": "GAP", "detail": "Faltam dados críticos para screening robusto"},
+    ]
+    return profile
 
 
 def _score_flammability(seed: Dict[str, Any]) -> float:
@@ -107,8 +193,8 @@ def _build_readiness(profile: CompoundProfile) -> list[dict]:
     checks.append(
         {
             "check": "Chemical identity",
-            "status": "OK" if profile.identity.get("cas") and profile.identity.get("formula") else "GAP",
-            "detail": "CAS, formula e molecular weight",
+            "status": "OK" if profile.identity.get("formula") and profile.identity.get("molecular_weight") else "GAP",
+            "detail": "Nome, fórmula, MW e identificadores",
         }
     )
 
@@ -124,7 +210,7 @@ def _build_readiness(profile: CompoundProfile) -> list[dict]:
         {
             "check": "Flammability package",
             "status": "OK" if flamm_ok else "GAP",
-            "detail": "LFL/UFL, flash point, AIT, ignition relevance",
+            "detail": "LFL/UFL, flash point, AIT",
         }
     )
     checks.append(
@@ -141,7 +227,6 @@ def _build_readiness(profile: CompoundProfile) -> list[dict]:
             "detail": "Corrosividade, incompatibilidades e materiais",
         }
     )
-
     checks.append(
         {
             "check": "Scenario routing",
@@ -156,7 +241,8 @@ def _build_readiness(profile: CompoundProfile) -> list[dict]:
 def build_compound_profile(query: str) -> Optional[CompoundProfile]:
     seed = resolve_local_compound(query)
     if seed is None:
-        return None
+        pubchem = fetch_pubchem_record(query)
+        return _generic_profile_from_pubchem(query, pubchem)
 
     pubchem = fetch_pubchem_record(seed["identity"]["cas"] or seed["identity"]["name"])
 
@@ -186,6 +272,9 @@ def build_compound_profile(query: str) -> Optional[CompoundProfile]:
 
     for key, meta in seed.get("exposure_limits", {}).items():
         profile.exposure_limits[key] = _pv(meta.get("value"), meta.get("unit", ""), meta.get("source", "local_seed"), "seed")
+
+    if pubchem.get("xlogp") is not None:
+        profile.physchem["xlogp"] = _pv(pubchem["xlogp"], "", "PubChem", "live")
 
     profile.reactivity = dict(seed.get("reactivity", {}))
     profile.storage = {
