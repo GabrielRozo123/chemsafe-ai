@@ -19,7 +19,9 @@ from compound_engine import (
 from deterministic import IPL_CATALOG, compute_lopa, gaussian_dispersion, pool_fire
 from hazop_db import HAZOP_DB
 from risk_visuals import (
+    build_confidence_figure,
     build_hazard_fingerprint_figure,
+    build_incompatibility_matrix_figure,
     build_ipl_layers_figure,
     build_risk_matrix_figure,
     build_source_coverage_figure,
@@ -27,8 +29,14 @@ from risk_visuals import (
 
 APP_CSS = """
 <style>
-.stApp { background: linear-gradient(180deg, #07111f, #081a31); color: #e9f1ff; }
-.block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
+.stApp {
+    background: linear-gradient(180deg, #07111f, #081a31);
+    color: #e9f1ff;
+}
+.block-container {
+    padding-top: 1.2rem;
+    padding-bottom: 2rem;
+}
 .hero {
     background: linear-gradient(135deg, #0d2345, #0b1830);
     border: 1px solid #1c3f78;
@@ -36,11 +44,22 @@ APP_CSS = """
     padding: 1.2rem 1.4rem;
     margin-bottom: 1rem;
 }
-.hero h1 { margin: 0 0 0.35rem 0; color: #f4f8ff; }
-.hero p { margin: 0; color: #9fc1ff; }
+.hero h1 {
+    margin: 0 0 0.35rem 0;
+    color: #f4f8ff;
+}
+.hero p {
+    margin: 0;
+    color: #9fc1ff;
+}
 .badge {
-    display: inline-block; margin: 0.35rem 0.35rem 0 0; padding: 0.22rem 0.55rem;
-    border-radius: 999px; border: 1px solid #2b5aa1; color: #cfe1ff; font-size: 0.78rem;
+    display: inline-block;
+    margin: 0.35rem 0.35rem 0 0;
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid #2b5aa1;
+    color: #cfe1ff;
+    font-size: 0.78rem;
 }
 .metric-box {
     background: rgba(10,22,42,0.95);
@@ -49,12 +68,22 @@ APP_CSS = """
     padding: 1rem;
     min-height: 112px;
 }
-.metric-label { color: #7ea8ea; font-size: 0.78rem; text-transform: uppercase; }
-.metric-value { color: white; font-size: 1.55rem; font-weight: 700; margin-top: 0.45rem; }
+.metric-label {
+    color: #7ea8ea;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+}
+.metric-value {
+    color: white;
+    font-size: 1.55rem;
+    font-weight: 700;
+    margin-top: 0.45rem;
+}
 .risk-blue { color: #62a8ff; }
 .risk-green { color: #34d399; }
 .risk-amber { color: #fbbf24; }
 .risk-red { color: #fb7185; }
+
 .panel {
     background: rgba(9,17,31,0.92);
     border: 1px solid #1d365f;
@@ -62,8 +91,13 @@ APP_CSS = """
     padding: 1rem;
     margin-bottom: 0.8rem;
 }
-.panel h3 { margin-top: 0; }
-.small-muted { color: #9ab2d8; font-size: 0.9rem; }
+.panel h3 {
+    margin-top: 0;
+}
+.small-muted {
+    color: #9ab2d8;
+    font-size: 0.9rem;
+}
 .note-card {
     background: rgba(12, 28, 54, 0.95);
     border-left: 4px solid #4b88ff;
@@ -76,6 +110,12 @@ APP_CSS = """
     border-radius: 14px;
     padding: 0.9rem;
     height: 100%;
+}
+.section-title {
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: #d9e8ff;
+    margin-bottom: 0.45rem;
 }
 </style>
 """
@@ -98,6 +138,8 @@ if "dispersion_result" not in st.session_state:
     st.session_state.dispersion_result = None
 if "pool_fire_result" not in st.session_state:
     st.session_state.pool_fire_result = None
+if "selected_ipl_names" not in st.session_state:
+    st.session_state.selected_ipl_names = []
 
 
 def metric_card(label: str, value: str, klass: str = "risk-blue") -> str:
@@ -126,12 +168,12 @@ with st.sidebar:
             load_profile_from_key(key)
 
     st.markdown("---")
-    manual_query = st.text_input("Buscar composto", placeholder="Nome ou CAS")
+    manual_query = st.text_input("Buscar composto", placeholder="Nome, CAS ou fórmula")
     if st.button("Carregar composto", width="stretch"):
         if manual_query.strip():
             profile = build_compound_profile(manual_query.strip())
             if profile is None:
-                st.warning("Composto não encontrado na base local inicial.")
+                st.warning("Composto não encontrado nem na base local nem no fallback do PubChem.")
             else:
                 st.session_state.profile = profile
 
@@ -150,12 +192,12 @@ st.markdown(
       <h1>ChemSafe Pro Deterministic</h1>
       <p>Segurança de processo guiada por propriedades reais, referências oficiais e lógica de decisão transparente.</p>
       <div>
-        <span class="badge">PubChem live</span>
-        <span class="badge">NIST linked</span>
-        <span class="badge">NIOSH linked</span>
-        <span class="badge">CAMEO linked</span>
+        <span class="badge">compound profile</span>
+        <span class="badge">hazard fingerprint</span>
         <span class="badge">risk matrix</span>
         <span class="badge">IPL stack</span>
+        <span class="badge">incompatibility matrix</span>
+        <span class="badge">confidence score</span>
       </div>
     </div>
     """,
@@ -173,21 +215,28 @@ with overview_tab:
     c3.markdown(metric_card("Rotas priorizadas", str(len(profile.routing))), unsafe_allow_html=True)
     c4.markdown(
         metric_card(
-            "Lacunas de dados",
-            str(len(profile.validation_gaps)),
-            "risk-amber" if profile.validation_gaps else "risk-green",
+            "Confiança",
+            f"{profile.confidence_score:.0f}/100",
+            "risk-green" if profile.confidence_score >= 80 else "risk-amber" if profile.confidence_score >= 50 else "risk-red",
         ),
         unsafe_allow_html=True,
     )
 
-    st.markdown("<div class='panel'><h3>Hazard fingerprint</h3></div>", unsafe_allow_html=True)
-    st.pyplot(build_hazard_fingerprint_figure(profile), width="stretch")
+    a, b = st.columns(2)
+    with a:
+        st.markdown("<div class='panel'><h3>Hazard fingerprint</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_hazard_fingerprint_figure(profile), width="stretch")
+    with b:
+        st.markdown("<div class='panel'><h3>Confiança do pacote de dados</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_confidence_figure(profile), width="stretch")
 
-    st.markdown("<div class='panel'><h3>Cobertura de fontes</h3></div>", unsafe_allow_html=True)
-    st.pyplot(build_source_coverage_figure(profile), width="stretch")
-
-    st.markdown("<div class='panel'><h3>Readiness para screening</h3></div>", unsafe_allow_html=True)
-    st.dataframe(pd.DataFrame(profile.readiness), width="stretch", hide_index=True)
+    a, b = st.columns(2)
+    with a:
+        st.markdown("<div class='panel'><h3>Cobertura de fontes</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_source_coverage_figure(profile), width="stretch")
+    with b:
+        st.markdown("<div class='panel'><h3>Readiness para screening</h3></div>", unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(profile.readiness), width="stretch", hide_index=True)
 
     st.markdown("<div class='panel'><h3>Roteamento automático</h3></div>", unsafe_allow_html=True)
     if profile.routing:
@@ -195,6 +244,11 @@ with overview_tab:
             st.success(item)
     else:
         st.info("Nenhuma rota dominante identificada.")
+
+    if profile.validation_gaps:
+        st.markdown("<div class='panel'><h3>Lacunas de dados</h3></div>", unsafe_allow_html=True)
+        for gap in profile.validation_gaps:
+            st.warning(gap)
 
 with compound_tab:
     left, right = st.columns(2)
@@ -208,8 +262,11 @@ with compound_tab:
         st.dataframe(pd.DataFrame(identity_rows), width="stretch", hide_index=True)
 
         st.markdown("<div class='panel'><h3>Perigos / GHS</h3></div>", unsafe_allow_html=True)
-        for hz in profile.hazards:
-            st.error(hz)
+        if profile.hazards:
+            for hz in profile.hazards:
+                st.error(hz)
+        else:
+            st.info("Sem hazards locais cadastrados para este composto.")
 
         st.markdown("<div class='panel'><h3>NFPA</h3></div>", unsafe_allow_html=True)
         st.dataframe(pd.DataFrame([profile.nfpa]), width="stretch", hide_index=True)
@@ -219,8 +276,9 @@ with compound_tab:
         st.dataframe(pd.DataFrame(profile.to_flat_physchem()), width="stretch", hide_index=True)
 
         st.markdown("<div class='panel'><h3>Limites de exposição</h3></div>", unsafe_allow_html=True)
-        if profile.to_flat_limits():
-            st.dataframe(pd.DataFrame(profile.to_flat_limits()), width="stretch", hide_index=True)
+        limits = profile.to_flat_limits()
+        if limits:
+            st.dataframe(pd.DataFrame(limits), width="stretch", hide_index=True)
         else:
             st.info("Sem limites locais cadastrados para este composto.")
 
@@ -230,9 +288,14 @@ with compound_tab:
         if incompat:
             for item in incompat:
                 st.warning(item)
+        else:
+            st.info("Sem incompatibilidades locais estruturadas.")
         if notes:
             for item in notes:
                 st.info(item)
+
+    st.markdown("<div class='panel'><h3>Matriz de incompatibilidade</h3></div>", unsafe_allow_html=True)
+    st.pyplot(build_incompatibility_matrix_figure(profile), width="stretch")
 
     st.markdown("<div class='panel'><h3>Links oficiais</h3></div>", unsafe_allow_html=True)
     links = profile.storage.get("official_links", [])
@@ -288,11 +351,19 @@ with hazop_tab:
             )
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
+    st.markdown(
+        "<div class='note-card'>Nesta versão, o HAZOP deixa de ser apenas uma checklist: o composto altera o peso relativo de ignição, toxic release, sobrepressão, corrosão e incompatibilidade.</div>",
+        unsafe_allow_html=True,
+    )
+
 with lopa_tab:
     st.markdown("<div class='panel'><h3>IPLs sugeridas pelo perfil do composto</h3></div>", unsafe_allow_html=True)
     suggested_ipls = suggest_lopa_ipls(profile)
-    for item in suggested_ipls:
-        st.success(item)
+    if suggested_ipls:
+        for item in suggested_ipls:
+            st.success(item)
+    else:
+        st.info("Nenhuma IPL sugerida automaticamente para este perfil.")
 
     left, right = st.columns(2)
     with left:
@@ -327,8 +398,8 @@ with lopa_tab:
                 if name in label:
                     chosen.append((name, pfd))
                     break
-        st.session_state.lopa_result = compute_lopa(f_ie, criterion, chosen)
         st.session_state.selected_ipl_names = selected_names
+        st.session_state.lopa_result = compute_lopa(f_ie, criterion, chosen)
 
     if st.session_state.lopa_result:
         r = st.session_state.lopa_result
@@ -337,16 +408,12 @@ with lopa_tab:
         b.markdown(metric_card("PFD total", f"{r['pfd_total']:.2e}"), unsafe_allow_html=True)
         c.markdown(metric_card("MCF", f"{r['mcf']:.2e}/ano", "risk-red" if r["ratio"] > 1 else "risk-green"), unsafe_allow_html=True)
         d.markdown(metric_card("SIL", r["sil"], "risk-amber"), unsafe_allow_html=True)
+
         st.dataframe(pd.DataFrame(r["selected_ipls"], columns=["IPL", "PFD"]), width="stretch", hide_index=True)
 
         st.markdown("<div class='panel'><h3>IPL stack</h3></div>", unsafe_allow_html=True)
-        st.pyplot(
-            build_ipl_layers_figure(
-                st.session_state.get("selected_ipl_names", []),
-                suggested_ipls,
-            ),
-            width="stretch",
-        )
+        selected_names = st.session_state.get("selected_ipl_names", [])
+        st.pyplot(build_ipl_layers_figure(selected_names, suggested_ipls), width="stretch")
 
 with consequence_tab:
     st.markdown("<div class='panel'><h3>Roteamento de consequências</h3></div>", unsafe_allow_html=True)
@@ -368,7 +435,7 @@ with consequence_tab:
             d1, d2, d3 = st.columns(3)
             default_idlh = profile.limit("IDLH_ppm", 300.0)
             idlh_ppm = d1.number_input("IDLH (ppm)", value=float(default_idlh), min_value=0.001)
-            mw = d2.number_input("PM do gás", value=float(profile.identity.get("molecular_weight", 20.0)), min_value=1.0)
+            mw = d2.number_input("PM do gás", value=float(profile.identity.get("molecular_weight", 20.0) or 20.0), min_value=1.0)
             h = d3.number_input("Altura da fonte (m)", value=0.0, min_value=0.0)
 
             if st.button("Rodar dispersão", type="primary"):
