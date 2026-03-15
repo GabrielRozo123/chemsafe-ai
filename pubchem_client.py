@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import requests
 
-
 PUBCHEM_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 
 
-def _safe_get(url: str, timeout: int = 8) -> Optional[Dict[str, Any]]:
+def _safe_get(url: str, timeout: int = 10) -> Optional[Dict[str, Any]]:
     try:
         r = requests.get(url, timeout=timeout)
         r.raise_for_status()
@@ -17,6 +17,7 @@ def _safe_get(url: str, timeout: int = 8) -> Optional[Dict[str, Any]]:
         return None
 
 
+@lru_cache(maxsize=512)
 def _get_first_cid_from_name(query: str) -> Optional[int]:
     data = _safe_get(f"{PUBCHEM_BASE}/compound/name/{requests.utils.quote(query)}/cids/JSON")
     if not data:
@@ -27,6 +28,7 @@ def _get_first_cid_from_name(query: str) -> Optional[int]:
         return None
 
 
+@lru_cache(maxsize=512)
 def _get_first_cid_from_formula(query: str) -> Optional[int]:
     data = _safe_get(f"{PUBCHEM_BASE}/compound/fastformula/{requests.utils.quote(query)}/cids/JSON")
     if not data:
@@ -37,26 +39,35 @@ def _get_first_cid_from_formula(query: str) -> Optional[int]:
         return None
 
 
+def _normalize_formula_candidate(text: str) -> str:
+    return text.strip().replace(" ", "").upper()
+
+
 def _resolve_cid(query: str) -> Optional[int]:
-    cid = _get_first_cid_from_name(query)
+    q = (query or "").strip()
+    if not q:
+        return None
+
+    cid = _get_first_cid_from_name(q)
     if cid is not None:
         return cid
 
-    q = query.strip().upper()
-    if q and all(ch.isalnum() for ch in q):
-        cid = _get_first_cid_from_formula(q)
+    formula_candidate = _normalize_formula_candidate(q)
+    if formula_candidate:
+        cid = _get_first_cid_from_formula(formula_candidate)
         if cid is not None:
             return cid
 
     return None
 
 
+@lru_cache(maxsize=512)
 def fetch_pubchem_record(query: str) -> Dict[str, Any]:
-    query = (query or "").strip()
-    if not query:
+    q = (query or "").strip()
+    if not q:
         return {}
 
-    cid = _resolve_cid(query)
+    cid = _resolve_cid(q)
     if cid is None:
         return {}
 
@@ -90,7 +101,7 @@ def fetch_pubchem_record(query: str) -> Dict[str, Any]:
     synonyms: List[str] = []
     if synonyms_data:
         try:
-            synonyms = synonyms_data["InformationList"]["Information"][0]["Synonym"][:40]
+            synonyms = synonyms_data["InformationList"]["Information"][0]["Synonym"][:50]
         except Exception:
             synonyms = []
 
