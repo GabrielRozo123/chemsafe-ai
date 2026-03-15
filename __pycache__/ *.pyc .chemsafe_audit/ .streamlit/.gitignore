@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.chemsafe_audit/
+.streamlit/secrets.toml
+.env
