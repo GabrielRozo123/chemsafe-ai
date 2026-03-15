@@ -2,54 +2,64 @@ from __future__ import annotations
 
 BASE_REFERENCES = [
     {
-        "group": "Normas e standards",
-        "title": "IEC 61882:2016",
-        "note": "Estrutura de HAZOP, intenção de projeto, guidewords, causas, consequências, salvaguardas e ações.",
+        "Grupo": "Normas e standards",
+        "Título": "IEC 61882:2016",
+        "Observação": "Base para HAZOP: intenção de projeto, guidewords, causas, consequências, salvaguardas e ações.",
     },
     {
-        "group": "Normas e standards",
-        "title": "IEC 61511-1:2016 + A1:2017",
-        "note": "Base para SIS, SIL e camadas instrumentadas de proteção.",
+        "Grupo": "Normas e standards",
+        "Título": "IEC 61511-1:2016 + A1:2017",
+        "Observação": "Base para SIS, SIL e camadas instrumentadas de proteção.",
     },
     {
-        "group": "Normas e standards",
-        "title": "OSHA 29 CFR 1910.119",
-        "note": "PSM e requisitos de process safety information antes da PHA.",
+        "Grupo": "Normas e standards",
+        "Título": "OSHA 29 CFR 1910.119",
+        "Observação": "PSM e requisitos de process safety information antes da PHA.",
     },
     {
-        "group": "Normas e standards",
-        "title": "NR-20",
-        "note": "Inflamáveis e combustíveis.",
+        "Grupo": "Normas e standards",
+        "Título": "NR-20",
+        "Observação": "Inflamáveis e combustíveis.",
     },
     {
-        "group": "Normas e standards",
-        "title": "NR-13",
-        "note": "Caldeiras, vasos de pressão, tubulações e tanques metálicos.",
+        "Grupo": "Normas e standards",
+        "Título": "NR-13",
+        "Observação": "Caldeiras, vasos de pressão, tubulações e tanques metálicos.",
     },
     {
-        "group": "Fontes de dados",
-        "title": "PubChem",
-        "note": "Identidade química, sinônimos, CID, fórmula e metadados públicos.",
+        "Grupo": "Bases oficiais",
+        "Título": "PubChem",
+        "Observação": "Identidade química, sinônimos, descritores e metadados públicos.",
     },
     {
-        "group": "Fontes de dados",
-        "title": "NIST Chemistry WebBook",
-        "note": "Termodinâmica, vapor pressure e propriedades termofísicas públicas.",
+        "Grupo": "Bases oficiais",
+        "Título": "NIST Chemistry WebBook",
+        "Observação": "Propriedades termodinâmicas e termofísicas.",
     },
     {
-        "group": "Fontes de dados",
-        "title": "NIOSH Pocket Guide",
-        "note": "IDLH, REL, limites ocupacionais e incompatibilidades úteis para triagem.",
+        "Grupo": "Bases oficiais",
+        "Título": "NIOSH Pocket Guide",
+        "Observação": "IDLH, REL, PEL, propriedades, incompatibilidades e higiene ocupacional.",
     },
     {
-        "group": "Fontes de dados",
-        "title": "CAMEO Chemicals",
-        "note": "Incompatibilidade química, resposta emergencial e reatividade de mistura.",
+        "Grupo": "Bases oficiais",
+        "Título": "CAMEO Chemicals",
+        "Observação": "Reatividade química, resposta emergencial e hazards de mistura.",
     },
     {
-        "group": "Fontes de dados",
-        "title": "EPA CompTox Dashboard",
-        "note": "Hazard, exposure e dados químicos ampliados.",
+        "Grupo": "Bases oficiais",
+        "Título": "EPA CompTox",
+        "Observação": "Exposure, hazard e dados químicos ampliados.",
+    },
+    {
+        "Grupo": "Métodos de cálculo",
+        "Título": "Pasquill-Gifford / screening gaussiano",
+        "Observação": "Base para dispersão neutra simplificada no app.",
+    },
+    {
+        "Grupo": "Métodos de cálculo",
+        "Título": "Shokri-Beyler / Heskestad / screening de pool fire",
+        "Observação": "Base para altura de chama, poder emissivo e fluxo no alvo.",
     },
 ]
 
@@ -60,27 +70,27 @@ def build_references(profile) -> list[dict]:
     if profile.flags.get("flammable"):
         refs.append(
             {
-                "group": "Métodos e cálculos",
-                "title": "Crowl & Louvar — Flammability, Fires and Explosions",
-                "note": "Base conceitual para LFL/UFL, ignição, ventilação, inertização e screening de incêndio/explosão.",
+                "Grupo": "Métodos de cálculo",
+                "Título": "Crowl & Louvar — incêndios, explosões e inflamabilidade",
+                "Observação": "Apoio conceitual para LII/LSI, ignição, ventilação e screening de fogo/explosão.",
             }
         )
 
     if profile.flags.get("toxic_inhalation"):
         refs.append(
             {
-                "group": "Métodos e cálculos",
-                "title": "Crowl & Louvar — Toxicology / Dispersion",
-                "note": "Base conceitual para IDLH, critérios de toxicidade e screening de dispersão.",
+                "Grupo": "Métodos de cálculo",
+                "Título": "Crowl & Louvar — toxicologia e dispersão",
+                "Observação": "Apoio conceitual para IDLH, exposição e screening de dispersão.",
             }
         )
 
     if profile.flags.get("corrosive") or profile.flags.get("reactive_hazard"):
         refs.append(
             {
-                "group": "Métodos e cálculos",
-                "title": "Crowl & Louvar — Chemical Reactivity / Materials",
-                "note": "Base conceitual para reatividade, incompatibilidade e materiais de construção.",
+                "Grupo": "Métodos de cálculo",
+                "Título": "Crowl & Louvar — reatividade química e materiais",
+                "Observação": "Apoio conceitual para incompatibilidade, corrosão e seleção de materiais.",
             }
         )
 
