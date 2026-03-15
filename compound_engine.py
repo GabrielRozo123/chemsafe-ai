@@ -9,8 +9,8 @@ from nist_client import fetch_nist_record
 from pubchem_client import fetch_pubchem_record
 from references_registry import build_references
 from safety_rules import build_confidence_score, build_incompatibility_matrix
+from search_router import expand_search_candidates
 from source_links import build_official_source_links
-
 
 def _normalize(text: str) -> str:
     return (
@@ -37,19 +37,51 @@ def _pv(value: Any, unit: str = "", source: str = "", confidence: str = "seed") 
 
 
 def resolve_local_compound(query: str) -> Optional[Dict[str, Any]]:
-    q = _normalize(query)
-    for _, item in LOCAL_COMPOUNDS.items():
-        aliases = [_normalize(a) for a in item.get("aliases", [])]
-        identity = item.get("identity", {})
-        candidates = aliases + [
-            _normalize(identity.get("name", "")),
-            _normalize(identity.get("preferred_name", "")),
-            _normalize(identity.get("cas", "")),
-            _normalize(identity.get("formula", "")),
-        ]
-        if q in candidates:
-            return item
+    candidates = expand_search_candidates(query)
+    for cand in candidates:
+        q = _normalize(cand)
+        for _, item in LOCAL_COMPOUNDS.items():
+            aliases = [_normalize(a) for a in item.get("aliases", [])]
+            identity = item.get("identity", {})
+            checks = aliases + [
+                _normalize(identity.get("name", "")),
+                _normalize(identity.get("preferred_name", "")),
+                _normalize(identity.get("cas", "")),
+                _normalize(identity.get("formula", "")),
+            ]
+            if q in checks:
+                return item
     return None
+def _first_pubchem(candidates: list[str]) -> Dict[str, Any]:
+    for cand in candidates:
+        rec = fetch_pubchem_record(cand)
+        if rec:
+            return rec
+    return {}
+
+
+def _first_nist(candidates: list[str], cas: str = "") -> Dict[str, Any]:
+    if cas:
+        rec = fetch_nist_record(name="", cas=cas)
+        if rec:
+            return rec
+    for cand in candidates:
+        rec = fetch_nist_record(name=cand, cas="")
+        if rec:
+            return rec
+    return {}
+
+
+def _first_niosh(candidates: list[str], cas: str = "") -> Dict[str, Any]:
+    if cas:
+        rec = fetch_niosh_record(name="", cas=cas)
+        if rec:
+            return rec
+    for cand in candidates:
+        rec = fetch_niosh_record(name=cand, cas="")
+        if rec:
+            return rec
+    return {}    
 
 
 def _bool_flag_from_hazards(hazards: list[str], codes: list[str], contains: list[str]) -> bool:
@@ -333,17 +365,18 @@ def _build_generic_profile(query: str, pubchem: Dict[str, Any], nist: Dict[str, 
 
 
 def build_compound_profile(query: str) -> Optional[CompoundProfile]:
+    candidates = expand_search_candidates(query)
     seed = resolve_local_compound(query)
 
     if seed is None:
-        pubchem = fetch_pubchem_record(query)
-        nist = fetch_nist_record(name=query, cas="")
-        niosh = fetch_niosh_record(name=query, cas="")
+        pubchem = _first_pubchem(candidates)
+        nist = _first_nist(candidates, cas="")
+        niosh = _first_niosh(candidates, cas="")
         return _build_generic_profile(query, pubchem, nist, niosh)
 
-    pubchem = fetch_pubchem_record(seed["identity"]["cas"] or seed["identity"]["name"])
-    nist = fetch_nist_record(name=seed["identity"]["preferred_name"], cas=seed["identity"]["cas"])
-    niosh = fetch_niosh_record(name=seed["identity"]["preferred_name"], cas=seed["identity"]["cas"])
+    pubchem = _first_pubchem([seed["identity"]["cas"], seed["identity"]["preferred_name"], seed["identity"]["name"]])
+    nist = _first_nist(candidates + [seed["identity"]["preferred_name"], seed["identity"]["name"]], cas=seed["identity"]["cas"])
+    niosh = _first_niosh(candidates + [seed["identity"]["preferred_name"], seed["identity"]["name"]], cas=seed["identity"]["cas"])
 
     profile = CompoundProfile()
     profile.identity = {
@@ -379,7 +412,7 @@ def build_compound_profile(query: str) -> Optional[CompoundProfile]:
     profile.storage = {
         "incompatibilities": seed.get("reactivity", {}).get("incompatibilities", []),
         "notes": seed.get("reactivity", {}).get("notes", []),
-        "official_links": {},  # preenchido abaixo
+        "official_links": {},
     }
 
     _apply_live_enrichment(profile, nist, niosh)
