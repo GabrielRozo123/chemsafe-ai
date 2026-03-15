@@ -2,7 +2,7 @@ from __future__ import annotations
 
 LOCAL_COMPOUNDS = {
     "ethanol": {
-        "aliases": ["etanol", "ethanol", "alcool etilico", "álcool etílico", "64-17-5"],
+        "aliases": ["etanol", "ethanol", "alcool etilico", "álcool etílico", "64-17-5", "c2h6o"],
         "identity": {
             "name": "Etanol",
             "preferred_name": "Ethanol",
@@ -40,7 +40,7 @@ LOCAL_COMPOUNDS = {
         },
     },
     "acetone": {
-        "aliases": ["acetona", "acetone", "67-64-1", "propanona"],
+        "aliases": ["acetona", "acetone", "67-64-1", "propanona", "c3h6o"],
         "identity": {
             "name": "Acetona",
             "preferred_name": "Acetone",
@@ -78,7 +78,7 @@ LOCAL_COMPOUNDS = {
         },
     },
     "sulfuric_acid": {
-        "aliases": ["ácido sulfúrico", "acido sulfurico", "sulfuric acid", "7664-93-9"],
+        "aliases": ["ácido sulfúrico", "acido sulfurico", "sulfuric acid", "7664-93-9", "h2so4"],
         "identity": {
             "name": "Ácido Sulfúrico",
             "preferred_name": "Sulfuric acid",
@@ -148,7 +148,7 @@ LOCAL_COMPOUNDS = {
         },
     },
     "methane": {
-        "aliases": ["metano", "methane", "74-82-8", "gás natural", "gas natural"],
+        "aliases": ["metano", "methane", "74-82-8", "gás natural", "gas natural", "ch4"],
         "identity": {
             "name": "Metano",
             "preferred_name": "Methane",
@@ -179,7 +179,7 @@ LOCAL_COMPOUNDS = {
         },
     },
     "toluene": {
-        "aliases": ["tolueno", "toluene", "108-88-3", "toluol"],
+        "aliases": ["tolueno", "toluene", "108-88-3", "toluol", "c7h8"],
         "identity": {
             "name": "Tolueno",
             "preferred_name": "Toluene",
@@ -215,6 +215,72 @@ LOCAL_COMPOUNDS = {
             "reactive_hazard": False,
             "incompatibilities": ["oxidantes fortes", "fontes de ignição"],
             "notes": ["Inflamabilidade e exposição por vapores são eixos centrais."],
+        },
+    },
+    "benzene": {
+        "aliases": ["benzeno", "benzene", "71-43-2", "c6h6"],
+        "identity": {
+            "name": "Benzeno",
+            "preferred_name": "Benzene",
+            "cas": "71-43-2",
+            "formula": "C6H6",
+            "molecular_weight": 78.11,
+        },
+        "hazards": [
+            "H225 — Líquido e vapor altamente inflamáveis",
+            "H304 — Pode ser fatal se ingerido e penetrar nas vias respiratórias",
+            "H340 — Pode provocar defeitos genéticos",
+            "H350 — Pode provocar câncer",
+            "H372 — Provoca danos aos órgãos por exposição repetida ou prolongada",
+        ],
+        "nfpa": {"health": 2, "fire": 3, "reactivity": 0, "special": ""},
+        "physchem": {
+            "flash_point_c": {"value": -11.0, "unit": "°C", "source": "local_seed"},
+            "boiling_point_c": {"value": 80.1, "unit": "°C", "source": "local_seed"},
+            "autoignition_c": {"value": 498.0, "unit": "°C", "source": "local_seed"},
+            "lfl_volpct": {"value": 1.2, "unit": "%vol", "source": "local_seed"},
+            "ufl_volpct": {"value": 7.8, "unit": "%vol", "source": "local_seed"},
+            "vapor_pressure_kpa_20c": {"value": 10.0, "unit": "kPa", "source": "local_seed"},
+            "density_liquid_g_cm3": {"value": 0.879, "unit": "g/cm3", "source": "local_seed"},
+            "vapor_density_air": {"value": 2.7, "unit": "air=1", "source": "local_seed"},
+            "mie_mj": {"value": 0.2, "unit": "mJ", "source": "local_seed"},
+        },
+        "exposure_limits": {
+            "IDLH_ppm": {"value": 500, "unit": "ppm", "source": "local_seed"},
+            "TLV_TWA_ppm": {"value": 0.5, "unit": "ppm", "source": "local_seed"},
+        },
+        "reactivity": {
+            "corrosive": False,
+            "pressurized": False,
+            "reactive_hazard": False,
+            "incompatibilities": ["oxidantes fortes", "fontes de ignição"],
+            "notes": ["Priorizar inflamabilidade, toxicidade crônica e contenção de vapores."],
+        },
+    },
+    "water": {
+        "aliases": ["água", "agua", "water", "7732-18-5", "h2o"],
+        "identity": {
+            "name": "Água",
+            "preferred_name": "Water",
+            "cas": "7732-18-5",
+            "formula": "H2O",
+            "molecular_weight": 18.015,
+        },
+        "hazards": [],
+        "nfpa": {"health": 0, "fire": 0, "reactivity": 0, "special": ""},
+        "physchem": {
+            "boiling_point_c": {"value": 100.0, "unit": "°C", "source": "local_seed"},
+            "melting_point_c": {"value": 0.0, "unit": "°C", "source": "local_seed"},
+            "density_liquid_g_cm3": {"value": 0.998, "unit": "g/cm3", "source": "local_seed"},
+            "vapor_pressure_kpa_20c": {"value": 2.34, "unit": "kPa", "source": "local_seed"},
+        },
+        "exposure_limits": {},
+        "reactivity": {
+            "corrosive": False,
+            "pressurized": False,
+            "reactive_hazard": False,
+            "incompatibilities": ["substâncias reativas com água, quando aplicável"],
+            "notes": ["Usar como utilidade/solvente de referência; risco depende da condição operacional."],
         },
     },
 }
