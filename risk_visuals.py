@@ -7,16 +7,12 @@ import numpy as np
 from matplotlib.colors import ListedColormap
 
 
-# =========================
-# Design tokens do app
-# =========================
 FIG_BG = "#07111f"
 AX_BG = "#0b1730"
 GRID = "#29476d"
 TEXT = "#e8f1ff"
 MUTED = "#9ab2d8"
 BLUE = "#4da3ff"
-BLUE_2 = "#6bc5ff"
 GREEN = "#34d399"
 AMBER = "#fbbf24"
 RED = "#fb7185"
@@ -83,7 +79,6 @@ def build_source_coverage_figure(profile: Any):
 
     labels = list(counts.keys()) or ["no data"]
     values = list(counts.values()) or [1]
-
     colors = [BLUE, CYAN, GREEN, PURPLE, AMBER, RED][: len(labels)]
 
     fig, ax = plt.subplots(figsize=(6.4, 4.2))
@@ -105,7 +100,7 @@ def build_source_coverage_figure(profile: Any):
         t.set_fontsize(9)
         t.set_fontweight("bold")
 
-    ax.set_title("Source Coverage", color=TEXT, fontsize=12, fontweight="bold", pad=12)
+    ax.set_title("Cobertura de fontes", color=TEXT, fontsize=12, fontweight="bold", pad=12)
     fig.tight_layout()
     return fig
 
@@ -117,12 +112,12 @@ def build_confidence_figure(profile: Any):
     fig, ax = _base_figure((6.2, 3.8))
 
     color = GREEN if score >= 80 else AMBER if score >= 50 else RED
-    ax.barh(["Confidence"], [score], color=color, edgecolor="none", height=0.55)
-    ax.barh(["Confidence"], [remaining], left=[score], color="#1b2b46", edgecolor="none", height=0.55)
+    ax.barh(["Confiança"], [score], color=color, edgecolor="none", height=0.55)
+    ax.barh(["Confiança"], [remaining], left=[score], color="#1b2b46", edgecolor="none", height=0.55)
 
     ax.set_xlim(0, 100)
     ax.set_xlabel("Score")
-    _style_axes(ax, "Data Confidence", grid_axis="x")
+    _style_axes(ax, "Confiança do pacote de dados", grid_axis="x")
     ax.text(min(score + 1.5, 95), 0, f"{score:.0f}/100", color=TEXT, va="center", fontsize=10, fontweight="bold")
 
     fig.tight_layout()
@@ -130,14 +125,7 @@ def build_confidence_figure(profile: Any):
 
 
 def build_risk_matrix_figure(priorities: Iterable[dict]):
-    cmap = ListedColormap(
-        [
-            "#17324d",  # low
-            "#255c8a",  # moderate
-            "#8a6d1b",  # elevated
-            "#7a1f35",  # high
-        ]
-    )
+    cmap = ListedColormap(["#17324d", "#255c8a", "#8a6d1b", "#7a1f35"])
 
     color_grid = np.array(
         [
@@ -159,9 +147,9 @@ def build_risk_matrix_figure(priorities: Iterable[dict]):
     ax.set_yticks(range(5))
     ax.set_xticklabels(["1", "2", "3", "4", "5"], color=MUTED)
     ax.set_yticklabels(["1", "2", "3", "4", "5"], color=MUTED)
-    ax.set_xlabel("Likelihood", color=MUTED)
-    ax.set_ylabel("Severity", color=MUTED)
-    ax.set_title("Risk Matrix", color=TEXT, fontsize=12, fontweight="bold", pad=12)
+    ax.set_xlabel("Probabilidade", color=MUTED)
+    ax.set_ylabel("Severidade", color=MUTED)
+    ax.set_title("Matriz de risco", color=TEXT, fontsize=12, fontweight="bold", pad=12)
 
     for i in range(5):
         for j in range(5):
@@ -188,39 +176,47 @@ def build_risk_matrix_figure(priorities: Iterable[dict]):
 
 
 def build_ipl_layers_figure(selected_ipls: List[str], suggested_ipls: List[str]):
-    labels = ["Initiating", "Alarm/Detect", "Operator", "SIS/ESD", "Relief", "Containment", "Mitigation"]
+    labels = [
+        "Evento iniciador",
+        "Alarme/detecção",
+        "Operador",
+        "SIS/ESD",
+        "Alívio",
+        "Contenção",
+        "Mitigação",
+    ]
     score_map = {k: 0 for k in labels}
 
     all_text = " | ".join((selected_ipls or []) + (suggested_ipls or [])).lower()
 
     if all_text:
-        score_map["Initiating"] = 1
+        score_map["Evento iniciador"] = 1
     if any(x in all_text for x in ["alarm", "detecção", "deteccao", "detector"]):
-        score_map["Alarm/Detect"] = 1
+        score_map["Alarme/detecção"] = 1
     if "operador" in all_text:
-        score_map["Operator"] = 1
+        score_map["Operador"] = 1
     if any(x in all_text for x in ["sis", "trip", "esd", "isolamento remoto"]):
         score_map["SIS/ESD"] = 1
     if any(x in all_text for x in ["psv", "rupture", "disco", "relief", "alívio", "alivio"]):
-        score_map["Relief"] = 1
+        score_map["Alívio"] = 1
     if any(x in all_text for x in ["dique", "contain", "contenção", "containment"]):
-        score_map["Containment"] = 1
+        score_map["Contenção"] = 1
     if any(x in all_text for x in ["foam", "espuma", "sprinkler", "evac", "ventila", "abatimento", "fire"]):
-        score_map["Mitigation"] = 1
+        score_map["Mitigação"] = 1
 
     values = [score_map[k] for k in labels]
     colors = [GREEN if v == 1 else "#243750" for v in values]
 
-    fig, ax = _base_figure((8.6, 3.2))
+    fig, ax = _base_figure((8.8, 3.3))
     x = np.arange(len(labels))
     bars = ax.bar(x, values, color=colors, edgecolor="none", width=0.65)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=20, ha="right", color=MUTED)
+    ax.set_xticklabels(labels, rotation=18, ha="right", color=MUTED)
     ax.set_ylim(0, 1.25)
     ax.set_yticks([0, 1])
-    ax.set_yticklabels(["missing", "present"], color=MUTED)
-    _style_axes(ax, "Protection Layers Snapshot", grid_axis="y")
+    ax.set_yticklabels(["ausente", "presente"], color=MUTED)
+    _style_axes(ax, "Panorama das camadas de proteção", grid_axis="y")
 
     for rect, v in zip(bars, values):
         ax.text(
@@ -240,37 +236,30 @@ def build_ipl_layers_figure(selected_ipls: List[str], suggested_ipls: List[str])
 
 def build_incompatibility_matrix_figure(profile: Any):
     matrix = getattr(profile, "incompatibility_matrix", [])
-    labels = [row["category"] for row in matrix] if matrix else ["No data"]
-    status = [row["status"] for row in matrix] if matrix else ["Review"]
+    labels = [row["categoria"] for row in matrix] if matrix else ["Sem dados"]
+    status = [row["status"] for row in matrix] if matrix else ["Revisar"]
 
     mapping = {
-        "Review": 0,
-        "Compatible": 1,
-        "Caution": 2,
-        "Incompatible": 3,
+        "Revisar": 0,
+        "Compatível": 1,
+        "Cuidado": 2,
+        "Incompatível": 3,
     }
-    palette = ListedColormap(
-        [
-            "#243750",  # review
-            "#1f7a5a",  # compatible
-            "#8a6d1b",  # caution
-            "#7a1f35",  # incompatible
-        ]
-    )
+    palette = ListedColormap(["#243750", "#1f7a5a", "#8a6d1b", "#7a1f35"])
 
     values = [mapping.get(s, 0) for s in status]
     arr = np.array(values).reshape(1, len(values))
 
-    fig, ax = plt.subplots(figsize=(9.2, 2.8))
+    fig, ax = plt.subplots(figsize=(9.4, 2.9))
     fig.patch.set_facecolor(FIG_BG)
     ax.set_facecolor(AX_BG)
     ax.imshow(arr, aspect="auto", cmap=palette, vmin=0, vmax=3)
 
     ax.set_xticks(range(len(labels)))
-    ax.set_xticklabels(labels, rotation=25, ha="right", color=MUTED)
+    ax.set_xticklabels(labels, rotation=22, ha="right", color=MUTED)
     ax.set_yticks([0])
     ax.set_yticklabels(["Status"], color=MUTED)
-    ax.set_title("Incompatibility Matrix", color=TEXT, fontsize=12, fontweight="bold", pad=12)
+    ax.set_title("Matriz de compatibilidade", color=TEXT, fontsize=12, fontweight="bold", pad=12)
 
     for j, s in enumerate(status):
         ax.text(j, 0, s, ha="center", va="center", fontsize=8, color=TEXT)
