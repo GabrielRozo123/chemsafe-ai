@@ -1,63 +1,91 @@
-# ChemSafe Pro AI v3.0
+# ChemSafe Pro Deterministic
 
-Plataforma Streamlit para **segurança de processo assistida por IA**, com arquitetura híbrida:
+Plataforma Streamlit para **segurança de processo orientada por propriedades químicas, bases públicas e lógica determinística**, desenvolvida para apoiar engenheiros de processo e engenheiros de segurança de processo em atividades de screening, priorização de cenários e estruturação inicial de estudos.
 
-- **motor determinístico** para HAZOP base, LOPA, SIL, dispersão gaussiana e pool fire;
-- **camada de IA** para copiloto técnico, pré-HAZOP, extração documental, RAG local e geração de relatórios profissionais.
+A arquitetura atual combina:
+
+- **base local curada** para compostos prioritários de segurança de processo;
+- **lookup universal** via bases públicas;
+- **motor determinístico** para HAZOP, LOPA, PSI/PSM readiness e screening de consequências;
+- **visualização técnica** com Bow-Tie, matrizes, comparadores e registro de riscos.
+
+---
 
 ## O que esta versão já entrega
 
-- Consulta química / SDS screening
-- HAZOP base + **pré-HAZOP por IA a partir de texto livre**
-- Bow-Tie simplificado
-- LOPA → SIL com IPLs configuráveis
-- Dispersão gaussiana screening
-- Pool fire screening
-- **Document Intelligence** com upload de PDF/DOCX/XLSX/CSV/TXT/JSON
-- **RAG local** com embeddings OpenAI quando disponíveis e fallback lexical offline
-- **Copiloto técnico** com contexto documental e memória da sessão
-- **Centro de relatórios** com HTML, Markdown e PDF com design executivo
-- **Trilha de auditoria** de chamadas LLM em `.chemsafe_audit/audit_log.jsonl`
+- Busca de compostos por:
+  - nome em português
+  - nome em inglês
+  - CAS
+  - fórmula química
+
+- Perfil químico integrado com:
+  - identidade e descritores
+  - propriedades físico-químicas
+  - limites de exposição
+  - incompatibilidades
+  - links oficiais para consulta
+
+- **Hazard fingerprint** com roteamento automático de cenários
+
+- **HAZOP orientado por propriedades**
+  - prioridades automáticas por composto
+  - worksheet HAZOP base
+  - matriz de risco inicial
+  - registro inicial de riscos
+
+- **Bow-Tie editável**
+  - modo **Executivo**
+  - modo **Técnico**
+
+- **LOPA / SIL preliminar**
+  - seleção de IPLs
+  - cálculo de MCF
+  - indicação de SIL requerido
+  - panorama das camadas de proteção
+
+- **PSI / PSM Readiness**
+  - score de prontidão
+  - checklist por pilar
+  - cobertura por pilar
+  - ações prioritárias
+
+- **Consequências**
+  - screening de dispersão
+  - screening de pool fire
+  - roteamento entre dispersão gaussiana e abordagem conservadora para gás denso
+
+- **Comparador entre compostos**
+  - propriedades lado a lado
+  - leitura rápida das diferenças de risco
+
+- **Persistência de casos**
+  - salvar caso
+  - carregar caso
+  - manter Bow-Tie, notas e resultados
+
+---
 
 ## Arquitetura
 
 ```mermaid
 flowchart TD
-    UI[Streamlit UI] --> DET[Deterministic Engine]
-    UI --> DOC[Document Parser]
-    DOC --> KB[Local Knowledge Base / RAG]
-    UI --> AI[AI Client / OpenAI Responses API]
-    KB --> AI
-    DET --> REPORT[Report Service]
-    AI --> REPORT
-    REPORT --> OUT[HTML / PDF / Markdown]
-    AI --> AUDIT[Audit Log]
-```
+    UI[Streamlit UI] --> CE[Compound Engine]
+    CE --> SEED[Base local curada]
+    CE --> PUB[PubChem]
+    CE --> NIST[NIST WebBook]
+    CE --> NIOSH[NIOSH Pocket Guide]
 
-## Stack
+    UI --> HAZOP[HAZOP Engine]
+    UI --> LOPA[LOPA / SIL Engine]
+    UI --> CONS[Consequence Screening]
+    UI --> PSI[PSI / PSM Readiness]
+    UI --> BOW[Bow-Tie Editor]
+    UI --> COMP[Compound Comparator]
+    UI --> CASES[Case Store]
 
-- Streamlit
-- OpenAI Python SDK
-- PyMuPDF
-- python-docx
-- pandas
-- reportlab
-- jinja2
-
-## Instalação
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
-pip install -r requirements.txt
-cp .env.example .env
-# edite OPENAI_API_KEY se quiser habilitar IA
-streamlit run app.py
-```
-
-## Limitações importantes
-
-- Os cálculos de consequência são **screening models**.
-- A IA foi posicionada como **copiloto técnico**, não como autoridade regulatória.
-- PFDs típicos em LOPA precisam de revisão de independência e adequação ao caso real.
-- Para estudos regulatórios, use ferramentas e fluxos de trabalho validados pela sua organização.
+    CE --> VIS[Risk Visuals]
+    HAZOP --> VIS
+    LOPA --> VIS
+    PSI --> VIS
+    BOW --> VIS
