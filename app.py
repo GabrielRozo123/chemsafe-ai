@@ -27,6 +27,8 @@ from moc_visuals import build_moc_impacts_figure, build_moc_score_figure
 from property_status import build_property_status_df, summarize_property_status
 from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
 from psi_visuals import build_psi_pillars_figure, build_psi_score_figure
+from pssr_engine import evaluate_pssr
+from pssr_visuals import build_pssr_score_figure
 from risk_register import build_risk_register
 from risk_visuals import (
     build_confidence_figure,
@@ -36,6 +38,12 @@ from risk_visuals import (
     build_risk_matrix_figure,
     build_source_coverage_figure,
 )
+from source_governance import (
+    build_evidence_ledger_df,
+    build_source_recommendations,
+    summarize_evidence,
+)
+from source_visuals import build_link_coverage_figure, build_source_summary_figure
 from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
 
 
@@ -200,6 +208,8 @@ if "bowtie_initialized_for" not in st.session_state:
     st.session_state.bowtie_initialized_for = ""
 if "moc_result" not in st.session_state:
     st.session_state.moc_result = None
+if "pssr_result" not in st.session_state:
+    st.session_state.pssr_result = None
 
 
 # =========================
@@ -312,6 +322,7 @@ def apply_loaded_case(case_data: dict):
     st.session_state.selected_ipl_names = case_data.get("selected_ipl_names", [])
     st.session_state.lopa_result = case_data.get("lopa_result")
     st.session_state.moc_result = case_data.get("moc_result")
+    st.session_state.pssr_result = case_data.get("pssr_result")
 
     bowtie = case_data.get("bowtie", {})
     if bowtie:
@@ -349,7 +360,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.write("**Meta do produto**")
-    st.caption("PSI + HAZOP + LOPA + Consequências + Referências")
+    st.caption("PSI + HAZOP + LOPA + Consequências + Governança de fontes")
     st.markdown("---")
 
     saved_cases = list_cases()
@@ -374,15 +385,16 @@ st.markdown(
     """
     <div class="hero">
       <h1>ChemSafe Pro Deterministic</h1>
-      <p>Segurança de processo guiada por propriedades reais, referências oficiais e lógica de decisão transparente.</p>
+      <p>Segurança de processo guiada por propriedades reais, fontes rastreáveis e lógica de decisão transparente.</p>
       <div>
         <span class="badge">Busca universal</span>
         <span class="badge">Pacote curado + ao vivo</span>
-        <span class="badge">HAZOP orientado por propriedades</span>
-        <span class="badge">LOPA assistida</span>
-        <span class="badge">Bow-Tie editável</span>
-        <span class="badge">Casos persistentes</span>
+        <span class="badge">Governança de fontes</span>
+        <span class="badge">HAZOP</span>
+        <span class="badge">LOPA</span>
+        <span class="badge">PSI / PSM</span>
         <span class="badge">MOC</span>
+        <span class="badge">PSSR</span>
       </div>
     </div>
     """,
@@ -393,8 +405,8 @@ st.markdown(
 # =========================
 # Tabs
 # =========================
-overview_tab, compound_tab, compare_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, moc_tab, consequence_tab, refs_tab, cases_tab = st.tabs(
-    ["Overview", "Composto", "Comparador", "HAZOP", "Bow-Tie", "LOPA", "PSI / PSM", "MOC", "Consequências", "Referências", "Casos"]
+overview_tab, compound_tab, sources_tab, compare_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, moc_tab, pssr_tab, consequence_tab, refs_tab, cases_tab = st.tabs(
+    ["Overview", "Composto", "Fontes / Evidências", "Comparador", "HAZOP", "Bow-Tie", "LOPA", "PSI / PSM", "MOC", "PSSR", "Consequências", "Referências", "Casos"]
 )
 
 
@@ -508,6 +520,39 @@ with compound_tab:
                 unsafe_allow_html=True,
             )
             st.link_button(f"Abrir {item['source']}", item["url"], width="stretch")
+
+
+# =========================
+# FONTES / EVIDÊNCIAS
+# =========================
+with sources_tab:
+    st.markdown("<div class='panel'><h3>Governança de fontes e evidências</h3></div>", unsafe_allow_html=True)
+
+    evidence_df = build_evidence_ledger_df(profile)
+    source_summary = summarize_evidence(profile)
+
+    a, b, c, d, e = st.columns(5)
+    a.markdown(metric_card("Campos rastreados", str(source_summary["linhas"]), "risk-blue"), unsafe_allow_html=True)
+    b.markdown(metric_card("Fontes oficiais", str(source_summary["oficial"]), "risk-green"), unsafe_allow_html=True)
+    c.markdown(metric_card("Curado", str(source_summary["curado"]), "risk-blue"), unsafe_allow_html=True)
+    d.markdown(metric_card("Revisar", str(source_summary["revisar"]), "risk-red"), unsafe_allow_html=True)
+    e.markdown(metric_card("Com link oficial", str(source_summary["com_link"]), "risk-amber"), unsafe_allow_html=True)
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("<div class='panel'><h3>Cobertura de fontes</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_source_summary_figure(source_summary), clear_figure=True)
+
+    with right:
+        st.markdown("<div class='panel'><h3>Cobertura de links</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_link_coverage_figure(source_summary), clear_figure=True)
+
+    st.markdown("<div class='panel'><h3>Ledger de evidências</h3></div>", unsafe_allow_html=True)
+    st.dataframe(evidence_df, width="stretch", hide_index=True)
+
+    st.markdown("<div class='panel'><h3>Recomendações de governança</h3></div>", unsafe_allow_html=True)
+    for item in build_source_recommendations(profile):
+        st.info(item)
 
 
 # =========================
@@ -820,7 +865,6 @@ with moc_tab:
         summary = moc_result["summary"]
         checklist_df = pd.DataFrame(moc_result["checklist_rows"])
         actions_df = pd.DataFrame(moc_result["actions_rows"])
-        impacts_df = pd.DataFrame(moc_result["impact_rows"])
 
         a, b, c, d = st.columns(4)
         a.markdown(
@@ -862,6 +906,94 @@ with moc_tab:
             st.markdown("<div class='panel'><h3>Pontos críticos</h3></div>", unsafe_allow_html=True)
             for _, row in critical_gaps.iterrows():
                 st.warning(f"{row['Item']}: {row['Comentário']}")
+
+
+# =========================
+# PSSR
+# =========================
+with pssr_tab:
+    st.markdown("<div class='panel'><h3>PSSR — Pre-Startup Safety Review</h3></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='note-card'>Esta aba usa os requisitos mínimos de PSSR como base e adiciona verificações práticas de prontidão para partida.</div>",
+        unsafe_allow_html=True,
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        scope_label = st.selectbox("Escopo do PSSR", ["PHA para nova instalação", "MOC para instalação modificada"])
+        design_ok = st.checkbox("Construção/equipamento conforme especificação de projeto")
+        procedures_ok = st.checkbox("Procedimentos de segurança/operação/manutenção/emergência adequados")
+        training_ok = st.checkbox("Treinamento concluído para os envolvidos")
+        pha_or_moc_ok = st.checkbox("Base de PHA/MOC resolvida para a partida")
+    with c2:
+        mi_ready = st.checkbox("Mechanical integrity / prontidão de equipamento")
+        relief_verified = st.checkbox("PSV / alívio / bloqueios revisados")
+        alarms_tested = st.checkbox("Alarmes, trips, detectores e permissivos testados")
+        emergency_ready = st.checkbox("Plano de emergência e resposta disponível")
+        startup_authorized = st.checkbox("Autorização formal para startup")
+
+    if st.button("Avaliar PSSR", type="primary"):
+        st.session_state.pssr_result = evaluate_pssr(
+            design_ok=design_ok,
+            procedures_ok=procedures_ok,
+            pha_or_moc_ok=pha_or_moc_ok,
+            training_ok=training_ok,
+            mi_ready=mi_ready,
+            relief_verified=relief_verified,
+            alarms_tested=alarms_tested,
+            emergency_ready=emergency_ready,
+            startup_authorized=startup_authorized,
+            scope_label=scope_label,
+        )
+
+    pssr_result = st.session_state.get("pssr_result")
+    if pssr_result:
+        summary = pssr_result["summary"]
+        checklist_df = pd.DataFrame(pssr_result["checklist_rows"])
+        actions_df = pd.DataFrame(pssr_result["actions_rows"])
+
+        a, b, c, d = st.columns(4)
+        a.markdown(
+            metric_card(
+                "Score PSSR",
+                f"{summary['score']:.0f}/100",
+                "risk-green" if summary["score"] >= 80 else "risk-amber" if summary["score"] >= 60 else "risk-red",
+            ),
+            unsafe_allow_html=True,
+        )
+        b.markdown(
+            metric_card(
+                "Readiness",
+                summary["readiness"],
+                "risk-green" if summary["readiness"] == "PRONTO PARA STARTUP" else "risk-amber" if summary["readiness"] == "PRONTO COM CONDICIONANTES" else "risk-red",
+            ),
+            unsafe_allow_html=True,
+        )
+        c.markdown(metric_card("Bloqueadores", str(summary["blocker_count"]), "risk-red"), unsafe_allow_html=True)
+        d.markdown(metric_card("Ações requeridas", str(summary["action_count"]), "risk-blue"), unsafe_allow_html=True)
+
+        left, right = st.columns(2)
+        with left:
+            st.markdown("<div class='panel'><h3>Score de prontidão</h3></div>", unsafe_allow_html=True)
+            st.pyplot(build_pssr_score_figure(summary), clear_figure=True)
+
+        with right:
+            st.markdown("<div class='panel'><h3>Bloqueadores de partida</h3></div>", unsafe_allow_html=True)
+            blockers = pssr_result.get("blockers", [])
+            if blockers:
+                for item in blockers:
+                    st.error(item)
+            else:
+                st.success("Sem bloqueadores centrais de PSSR identificados no checklist atual.")
+
+        st.markdown("<div class='panel'><h3>Checklist PSSR</h3></div>", unsafe_allow_html=True)
+        st.dataframe(checklist_df, width="stretch", hide_index=True)
+
+        st.markdown("<div class='panel'><h3>Ações antes da partida</h3></div>", unsafe_allow_html=True)
+        if actions_df.empty:
+            st.success("Sem ações pendentes registradas no checklist atual.")
+        else:
+            st.dataframe(actions_df, width="stretch", hide_index=True)
 
 
 # =========================
@@ -982,6 +1114,7 @@ with cases_tab:
                 selected_ipl_names=st.session_state.get("selected_ipl_names", []),
                 bowtie=bowtie_payload(),
                 moc_result=st.session_state.get("moc_result"),
+                pssr_result=st.session_state.get("pssr_result"),
             )
             st.session_state.current_case_name = case_name
             st.session_state.current_case_notes = case_notes
