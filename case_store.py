@@ -29,6 +29,7 @@ def save_case(
     selected_ipl_names: list[str] | None = None,
     bowtie: dict | None = None,
     moc_result: dict | None = None,
+    pssr_result: dict | None = None,
 ):
     payload = {
         "case_name": case_name,
@@ -40,6 +41,7 @@ def save_case(
         "lopa_result": lopa_result,
         "bowtie": bowtie or {},
         "moc_result": moc_result,
+        "pssr_result": pssr_result,
         "routing": profile.routing,
         "confidence_score": profile.confidence_score,
     }
