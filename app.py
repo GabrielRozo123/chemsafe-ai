@@ -22,6 +22,8 @@ from compound_engine import (
 from dense_gas_router import classify_dispersion_mode
 from deterministic import IPL_CATALOG, compute_lopa, gaussian_dispersion, pool_fire
 from hazop_db import HAZOP_DB
+from moc_engine import evaluate_moc
+from moc_visuals import build_moc_impacts_figure, build_moc_score_figure
 from property_status import build_property_status_df, summarize_property_status
 from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
 from psi_visuals import build_psi_pillars_figure, build_psi_score_figure
@@ -196,6 +198,8 @@ if "current_case_notes" not in st.session_state:
     st.session_state.current_case_notes = ""
 if "bowtie_initialized_for" not in st.session_state:
     st.session_state.bowtie_initialized_for = ""
+if "moc_result" not in st.session_state:
+    st.session_state.moc_result = None
 
 
 # =========================
@@ -307,6 +311,7 @@ def apply_loaded_case(case_data: dict):
     st.session_state.current_case_notes = case_data.get("notes", "")
     st.session_state.selected_ipl_names = case_data.get("selected_ipl_names", [])
     st.session_state.lopa_result = case_data.get("lopa_result")
+    st.session_state.moc_result = case_data.get("moc_result")
 
     bowtie = case_data.get("bowtie", {})
     if bowtie:
@@ -377,6 +382,7 @@ st.markdown(
         <span class="badge">LOPA assistida</span>
         <span class="badge">Bow-Tie editável</span>
         <span class="badge">Casos persistentes</span>
+        <span class="badge">MOC</span>
       </div>
     </div>
     """,
@@ -387,8 +393,8 @@ st.markdown(
 # =========================
 # Tabs
 # =========================
-overview_tab, compound_tab, compare_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, consequence_tab, refs_tab, cases_tab = st.tabs(
-    ["Overview", "Composto", "Comparador", "HAZOP", "Bow-Tie", "LOPA", "PSI / PSM", "Consequências", "Referências", "Casos"]
+overview_tab, compound_tab, compare_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, moc_tab, consequence_tab, refs_tab, cases_tab = st.tabs(
+    ["Overview", "Composto", "Comparador", "HAZOP", "Bow-Tie", "LOPA", "PSI / PSM", "MOC", "Consequências", "Referências", "Casos"]
 )
 
 
@@ -738,6 +744,127 @@ with psi_tab:
 
 
 # =========================
+# MOC
+# =========================
+with moc_tab:
+    st.markdown("<div class='panel'><h3>MOC — Management of Change</h3></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='note-card'>Use este módulo para triagem inicial da criticidade de mudanças em química, processo, materiais, instrumentação, alívio e procedimentos.</div>",
+        unsafe_allow_html=True,
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        change_type = st.selectbox(
+            "Tipo principal de mudança",
+            [
+                "Mudança química / novo composto",
+                "Mudança de condição operacional",
+                "Mudança de equipamento / material",
+                "Mudança de instrumentação / controle",
+                "Mudança em alívio / PSV",
+                "Mudança de procedimento / operação",
+                "Mudança organizacional / treinamento",
+            ],
+        )
+
+        impacts = st.multiselect(
+            "Aspectos impactados",
+            [
+                "Química / composição",
+                "Pressão",
+                "Temperatura",
+                "Vazão",
+                "Inventário",
+                "Materiais de construção",
+                "Instrumentação / controle",
+                "Alívio / PSV",
+                "Ventilação / detecção",
+                "Procedimentos operacionais",
+            ],
+        )
+
+        description = st.text_area(
+            "Descrição da mudança",
+            height=160,
+            placeholder="Descreva o que muda, por que muda, onde muda e qual o objetivo técnico/operacional.",
+        )
+
+    with c2:
+        temporary = st.checkbox("Mudança temporária")
+        protections_changed = st.checkbox("Afeta barreiras / proteções")
+        procedures_changed = st.checkbox("Exige revisão de procedimentos")
+        pids_affected = st.checkbox("Afeta P&ID / documentação")
+        training_required = st.checkbox("Exige treinamento")
+        new_chemical = st.checkbox("Introduce novo composto / nova composição")
+        bypass_or_override = st.checkbox("Envolve bypass / override / desabilitação")
+
+    if st.button("Avaliar MOC", type="primary"):
+        st.session_state.moc_result = evaluate_moc(
+            profile=profile,
+            change_type=change_type,
+            impacts=impacts,
+            description=description,
+            temporary=temporary,
+            protections_changed=protections_changed,
+            procedures_changed=procedures_changed,
+            pids_affected=pids_affected,
+            training_required=training_required,
+            new_chemical=new_chemical,
+            bypass_or_override=bypass_or_override,
+        )
+
+    moc_result = st.session_state.get("moc_result")
+
+    if moc_result:
+        summary = moc_result["summary"]
+        checklist_df = pd.DataFrame(moc_result["checklist_rows"])
+        actions_df = pd.DataFrame(moc_result["actions_rows"])
+        impacts_df = pd.DataFrame(moc_result["impact_rows"])
+
+        a, b, c, d = st.columns(4)
+        a.markdown(
+            metric_card(
+                "Score MOC",
+                f"{summary['score']:.0f}/100",
+                "risk-green" if summary["score"] < 25 else "risk-amber" if summary["score"] < 75 else "risk-red",
+            ),
+            unsafe_allow_html=True,
+        )
+        b.markdown(
+            metric_card(
+                "Classe",
+                summary["category"],
+                "risk-green" if summary["category"] == "Baixa" else "risk-amber" if summary["category"] in ["Moderada", "Alta"] else "risk-red",
+            ),
+            unsafe_allow_html=True,
+        )
+        c.markdown(metric_card("Gaps", str(summary["gap_count"]), "risk-red"), unsafe_allow_html=True)
+        d.markdown(metric_card("Revisões requeridas", str(summary["review_count"]), "risk-blue"), unsafe_allow_html=True)
+
+        left, right = st.columns(2)
+        with left:
+            st.markdown("<div class='panel'><h3>Score de criticidade</h3></div>", unsafe_allow_html=True)
+            st.pyplot(build_moc_score_figure(summary), clear_figure=True)
+
+        with right:
+            st.markdown("<div class='panel'><h3>Impactos da mudança</h3></div>", unsafe_allow_html=True)
+            st.pyplot(build_moc_impacts_figure(moc_result["impact_rows"]), clear_figure=True)
+
+        st.markdown("<div class='panel'><h3>Checklist de revisão</h3></div>", unsafe_allow_html=True)
+        st.dataframe(checklist_df, width="stretch", hide_index=True)
+
+        st.markdown("<div class='panel'><h3>Ações requeridas</h3></div>", unsafe_allow_html=True)
+        st.dataframe(actions_df, width="stretch", hide_index=True)
+
+        critical_gaps = checklist_df[checklist_df["Status"] == "GAP"]
+        if not critical_gaps.empty:
+            st.markdown("<div class='panel'><h3>Pontos críticos</h3></div>", unsafe_allow_html=True)
+            for _, row in critical_gaps.iterrows():
+                st.warning(f"{row['Item']}: {row['Comentário']}")
+
+
+# =========================
 # CONSEQUÊNCIAS
 # =========================
 with consequence_tab:
@@ -854,6 +981,7 @@ with cases_tab:
                 lopa_result=st.session_state.get("lopa_result"),
                 selected_ipl_names=st.session_state.get("selected_ipl_names", []),
                 bowtie=bowtie_payload(),
+                moc_result=st.session_state.get("moc_result"),
             )
             st.session_state.current_case_name = case_name
             st.session_state.current_case_notes = case_notes
