@@ -21,6 +21,7 @@ from compound_engine import (
 )
 from dense_gas_router import classify_dispersion_mode
 from deterministic import IPL_CATALOG, compute_lopa, gaussian_dispersion, pool_fire
+from executive_report import build_executive_bundle
 from hazop_db import HAZOP_DB
 from moc_engine import evaluate_moc
 from moc_visuals import build_moc_impacts_figure, build_moc_score_figure
@@ -29,6 +30,8 @@ from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
 from psi_visuals import build_psi_pillars_figure, build_psi_score_figure
 from pssr_engine import evaluate_pssr
 from pssr_visuals import build_pssr_score_figure
+from reactivity_engine import evaluate_pairwise_reactivity
+from reactivity_visuals import build_pairwise_matrix_figure
 from risk_register import build_risk_register
 from risk_visuals import (
     build_confidence_figure,
@@ -54,7 +57,7 @@ APP_CSS = """
     color: #e9f1ff;
 }
 .block-container {
-    padding-top: 1.0rem;
+    padding-top: 1rem;
     padding-bottom: 2rem;
     max-width: 1450px;
 }
@@ -146,12 +149,6 @@ APP_CSS = """
     padding: 0.9rem;
     height: 100%;
 }
-.section-title {
-    font-size: 1.03rem;
-    font-weight: 800;
-    color: #d9e8ff;
-    margin-bottom: 0.45rem;
-}
 .kpi-chip {
     display: inline-block;
     padding: 0.28rem 0.65rem;
@@ -163,12 +160,8 @@ APP_CSS = """
     background: rgba(31, 74, 139, 0.14);
     font-size: 0.78rem;
 }
-.divider-space {
-    height: 0.25rem;
-}
 </style>
 """
-
 
 st.set_page_config(
     page_title="ChemSafe Pro Deterministic",
@@ -210,6 +203,12 @@ if "moc_result" not in st.session_state:
     st.session_state.moc_result = None
 if "pssr_result" not in st.session_state:
     st.session_state.pssr_result = None
+if "reactivity_partner_profile" not in st.session_state:
+    st.session_state.reactivity_partner_profile = None
+if "reactivity_result" not in st.session_state:
+    st.session_state.reactivity_result = None
+if "report_bundle" not in st.session_state:
+    st.session_state.report_bundle = None
 
 
 # =========================
@@ -233,12 +232,6 @@ def load_profile_from_key(key: str) -> None:
     profile = build_compound_profile(aliases[0])
     st.session_state.selected_compound_key = key
     st.session_state.profile = profile
-
-
-def load_profile_from_query(query: str) -> None:
-    profile = build_compound_profile(query)
-    if profile is not None:
-        st.session_state.profile = profile
 
 
 def _default_bowtie_lists(profile):
@@ -323,6 +316,7 @@ def apply_loaded_case(case_data: dict):
     st.session_state.lopa_result = case_data.get("lopa_result")
     st.session_state.moc_result = case_data.get("moc_result")
     st.session_state.pssr_result = case_data.get("pssr_result")
+    st.session_state.reactivity_result = case_data.get("reactivity_result")
 
     bowtie = case_data.get("bowtie", {})
     if bowtie:
@@ -360,7 +354,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.write("**Meta do produto**")
-    st.caption("PSI + HAZOP + LOPA + Consequências + Governança de fontes")
+    st.caption("PSI + HAZOP + LOPA + Consequências + Governança + Reatividade")
     st.markdown("---")
 
     saved_cases = list_cases()
@@ -395,6 +389,8 @@ st.markdown(
         <span class="badge">PSI / PSM</span>
         <span class="badge">MOC</span>
         <span class="badge">PSSR</span>
+        <span class="badge">Reatividade</span>
+        <span class="badge">Relatório executivo</span>
       </div>
     </div>
     """,
@@ -405,8 +401,8 @@ st.markdown(
 # =========================
 # Tabs
 # =========================
-overview_tab, compound_tab, sources_tab, compare_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, moc_tab, pssr_tab, consequence_tab, refs_tab, cases_tab = st.tabs(
-    ["Overview", "Composto", "Fontes / Evidências", "Comparador", "HAZOP", "Bow-Tie", "LOPA", "PSI / PSM", "MOC", "PSSR", "Consequências", "Referências", "Casos"]
+overview_tab, compound_tab, sources_tab, compare_tab, reactivity_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, moc_tab, pssr_tab, consequence_tab, report_tab, refs_tab, cases_tab = st.tabs(
+    ["Overview", "Composto", "Fontes / Evidências", "Comparador", "Reatividade", "HAZOP", "Bow-Tie", "LOPA", "PSI / PSM", "MOC", "PSSR", "Consequências", "Relatório", "Referências", "Casos"]
 )
 
 
@@ -448,9 +444,7 @@ with overview_tab:
 
     st.markdown("<div class='panel'><h3>Status do pacote de propriedades</h3></div>", unsafe_allow_html=True)
     status_summary = summarize_property_status(profile)
-    chips = []
-    for k, v in status_summary.items():
-        chips.append(f"<span class='kpi-chip'>{k}: {v}</span>")
+    chips = [f"<span class='kpi-chip'>{k}: {v}</span>" for k, v in status_summary.items()]
     st.markdown("".join(chips), unsafe_allow_html=True)
     st.dataframe(build_property_status_df(profile), width="stretch", hide_index=True)
 
@@ -581,6 +575,88 @@ with compare_tab:
             st.info(line)
     else:
         st.info("Carregue um segundo composto para comparar propriedades e riscos.")
+
+
+# =========================
+# REATIVIDADE
+# =========================
+with reactivity_tab:
+    st.markdown("<div class='panel'><h3>Reactivity Lab — compatibilidade entre substâncias</h3></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='note-card'>Esta aba implementa a sugestão de matriz de incompatibilidade entre substâncias. Ela serve para screening inicial de mistura acidental, segregação e revisão de mitigação.</div>",
+        unsafe_allow_html=True,
+    )
+
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        partner_query = st.text_input(
+            "Segundo composto para análise de compatibilidade",
+            value="",
+            placeholder="Ex.: hipoclorito de sódio, sodium hypochlorite, água, ácido nítrico...",
+            key="reactivity_partner_query",
+        )
+    with c2:
+        if st.button("Carregar segundo composto", type="primary", width="stretch"):
+            if partner_query.strip():
+                st.session_state.reactivity_partner_profile = build_compound_profile(partner_query.strip())
+                if st.session_state.reactivity_partner_profile is not None:
+                    st.session_state.reactivity_result = evaluate_pairwise_reactivity(
+                        profile,
+                        st.session_state.reactivity_partner_profile,
+                    )
+
+    partner = st.session_state.get("reactivity_partner_profile")
+    result = st.session_state.get("reactivity_result")
+
+    if partner is not None and result is not None:
+        summary = result["summary"]
+
+        a, b, c, d = st.columns(4)
+        a.markdown(metric_card("Composto A", summary["compound_a"], "risk-blue"), unsafe_allow_html=True)
+        b.markdown(metric_card("Composto B", summary["compound_b"], "risk-blue"), unsafe_allow_html=True)
+        c.markdown(
+            metric_card(
+                "Severidade",
+                summary["severity"],
+                "risk-green" if summary["severity"] == "OK" else "risk-amber" if summary["severity"] in ["Revisar", "Cuidado"] else "risk-red",
+            ),
+            unsafe_allow_html=True,
+        )
+        d.markdown(
+            metric_card(
+                "Score de compatibilidade",
+                f"{summary['score']}/100",
+                "risk-green" if summary["score"] < 40 else "risk-amber" if summary["score"] < 80 else "risk-red",
+            ),
+            unsafe_allow_html=True,
+        )
+
+        left, right = st.columns(2)
+        with left:
+            st.markdown("<div class='panel'><h3>Famílias inferidas — composto A</h3></div>", unsafe_allow_html=True)
+            for fam in result["families_a"]:
+                st.info(fam)
+
+        with right:
+            st.markdown("<div class='panel'><h3>Famílias inferidas — composto B</h3></div>", unsafe_allow_html=True)
+            for fam in result["families_b"]:
+                st.info(fam)
+
+        st.markdown("<div class='panel'><h3>Matriz de compatibilidade</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_pairwise_matrix_figure(result["matrix_df"]), clear_figure=True)
+
+        st.markdown("<div class='panel'><h3>Regras disparadas</h3></div>", unsafe_allow_html=True)
+        hits_df = result["hits_df"]
+        if hits_df.empty:
+            st.success("Nenhuma regra forte de incompatibilidade foi disparada no screening atual.")
+        else:
+            st.dataframe(hits_df, width="stretch", hide_index=True)
+
+        st.markdown("<div class='panel'><h3>Mitigações sugeridas</h3></div>", unsafe_allow_html=True)
+        for item in result["recommendations"]:
+            st.warning(item)
+    else:
+        st.info("Carregue um segundo composto para montar a matriz de compatibilidade entre substâncias.")
 
 
 # =========================
@@ -860,7 +936,6 @@ with moc_tab:
         )
 
     moc_result = st.session_state.get("moc_result")
-
     if moc_result:
         summary = moc_result["summary"]
         checklist_df = pd.DataFrame(moc_result["checklist_rows"])
@@ -1076,6 +1151,68 @@ with consequence_tab:
 
 
 # =========================
+# RELATÓRIO
+# =========================
+with report_tab:
+    st.markdown("<div class='panel'><h3>Relatório executivo com trilha de evidências</h3></div>", unsafe_allow_html=True)
+
+    report_case_name = st.text_input(
+        "Nome do relatório",
+        value=st.session_state.current_case_name or profile.identity.get("name", "Caso"),
+        key="report_case_name",
+    )
+
+    if st.button("Gerar relatório executivo", type="primary"):
+        evidence_summary = summarize_evidence(profile)
+        evidence_recs = build_source_recommendations(profile)
+        psi_df = build_psi_readiness_df(
+            profile=profile,
+            lopa_result=st.session_state.get("lopa_result"),
+            bowtie=bowtie_payload(),
+        )
+        psi_summary = summarize_psi_readiness(psi_df)
+
+        hazop_priorities_for_report = suggest_hazop_priorities(profile, "Vaso de pressão")
+
+        bundle = build_executive_bundle(
+            case_name=report_case_name,
+            profile=profile,
+            context={
+                "evidence_summary": evidence_summary,
+                "evidence_recommendations": evidence_recs,
+                "hazop_priorities": hazop_priorities_for_report,
+                "lopa_result": st.session_state.get("lopa_result"),
+                "psi_summary": psi_summary,
+                "moc_result": st.session_state.get("moc_result"),
+                "pssr_result": st.session_state.get("pssr_result"),
+                "reactivity_result": st.session_state.get("reactivity_result"),
+            },
+        )
+        st.session_state.report_bundle = bundle
+        st.success("Relatório gerado.")
+
+    report_bundle = st.session_state.get("report_bundle")
+    if report_bundle:
+        st.download_button(
+            "Baixar Markdown",
+            report_bundle["markdown"],
+            file_name=f"{report_case_name.replace(' ', '_')}_executivo.md",
+            mime="text/markdown",
+            width="stretch",
+        )
+        st.download_button(
+            "Baixar HTML",
+            report_bundle["html"],
+            file_name=f"{report_case_name.replace(' ', '_')}_executivo.html",
+            mime="text/html",
+            width="stretch",
+        )
+
+        with st.expander("Pré-visualizar Markdown"):
+            st.markdown(report_bundle["markdown"].decode("utf-8"))
+
+
+# =========================
 # REFERÊNCIAS
 # =========================
 with refs_tab:
@@ -1115,6 +1252,7 @@ with cases_tab:
                 bowtie=bowtie_payload(),
                 moc_result=st.session_state.get("moc_result"),
                 pssr_result=st.session_state.get("pssr_result"),
+                reactivity_result=st.session_state.get("reactivity_result"),
             )
             st.session_state.current_case_name = case_name
             st.session_state.current_case_notes = case_notes
