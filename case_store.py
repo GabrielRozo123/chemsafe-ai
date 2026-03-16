@@ -30,6 +30,7 @@ def save_case(
     bowtie: dict | None = None,
     moc_result: dict | None = None,
     pssr_result: dict | None = None,
+    reactivity_result: dict | None = None,
 ):
     payload = {
         "case_name": case_name,
@@ -42,6 +43,7 @@ def save_case(
         "bowtie": bowtie or {},
         "moc_result": moc_result,
         "pssr_result": pssr_result,
+        "reactivity_result": reactivity_result,
         "routing": profile.routing,
         "confidence_score": profile.confidence_score,
     }
