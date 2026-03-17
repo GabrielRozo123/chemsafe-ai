@@ -15,11 +15,7 @@ from bowtie_visual import build_bowtie_custom_figure
 from case_store import list_cases, load_case, save_case
 from chemicals_seed import LOCAL_COMPOUNDS
 from comparator import build_comparison_df, build_comparison_highlights
-from compound_engine import (
-    build_compound_profile,
-    suggest_hazop_priorities,
-    suggest_lopa_ipls,
-)
+from compound_engine import build_compound_profile, suggest_hazop_priorities, suggest_lopa_ipls
 from dense_gas_router import classify_dispersion_mode
 from deterministic import IPL_CATALOG, compute_lopa, gaussian_dispersion, pool_fire
 from executive_report import build_executive_bundle
@@ -34,19 +30,12 @@ from pssr_visuals import build_pssr_score_figure
 from reactivity_engine import evaluate_pairwise_reactivity
 from reactivity_visuals import build_pairwise_matrix_figure
 from risk_register import build_risk_register
-from risk_visuals import (
-    build_confidence_figure,
-    build_hazard_fingerprint_figure,
-    build_incompatibility_matrix_figure,
-    build_ipl_layers_figure,
-    build_risk_matrix_figure,
-    build_source_coverage_figure,
-)
+from risk_visuals import build_confidence_figure, build_hazard_fingerprint_figure, build_incompatibility_matrix_figure, build_ipl_layers_figure, build_risk_matrix_figure, build_source_coverage_figure
 from source_governance import build_evidence_ledger_df, build_source_recommendations, summarize_evidence
 from source_visuals import build_link_coverage_figure, build_source_summary_figure
 from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
 
-# NOVOS MÓDULOS SPRINT 11, 12 e 13
+# NOVOS MÓDULOS SPRINT 11, 12, 13 e 14
 from action_hub import build_consolidated_action_plan
 from dashboard_engine import calculate_case_readiness_index
 from dashboard_visuals import build_readiness_gauge_figure, build_components_figure
@@ -54,6 +43,7 @@ from scenario_compare import build_what_if_comparison
 from i18n import t
 from area_engine import evaluate_area_risk
 from scenario_library import get_typical_scenarios
+from regulatory_engine import check_regulatory_framework, generate_facilitator_questions
 
 APP_CSS = """
 <style>
@@ -98,7 +88,6 @@ if "reactivity_partner_profile" not in st.session_state: st.session_state.reacti
 if "reactivity_result" not in st.session_state: st.session_state.reactivity_result = None
 if "report_bundle" not in st.session_state: st.session_state.report_bundle = None
 
-# Helpers
 def metric_card(label: str, value: str, klass: str = "risk-blue") -> str:
     return f"<div class='metric-box'><div class='metric-label'>{label}</div><div class='metric-value {klass}'>{value}</div></div>"
 
@@ -110,22 +99,22 @@ def load_profile_from_key(key: str) -> None:
 def _default_bowtie_lists(profile):
     threats, barriers_pre, consequences, barriers_mit = [], [], [],[]
     if profile.flags.get("flammable"):
-        threats += ["Fonte de ignição", "Vazamento"]
+        threats +=["Fonte de ignição", "Vazamento"]
         barriers_pre += ["Controle de ignição", "Detecção"]
         consequences +=["Incêndio", "Flash fire"]
-        barriers_mit += ["Combate a incêndio", "Contenção"]
+        barriers_mit +=["Combate a incêndio", "Contenção"]
     if profile.flags.get("toxic_inhalation"):
         threats +=["Falha de vedação", "Abertura indevida"]
-        barriers_pre += ["Isolamento", "ESD"]
+        barriers_pre +=["Isolamento", "ESD"]
         consequences += ["Exposição ocupacional", "Impacto comunitário"]
         barriers_mit +=["Alarme", "Evacuação"]
     
     return {
         "threats": threats or["Falha de equipamento"],
         "barriers_pre": barriers_pre or ["Procedimento operacional"],
-        "top_event": "Perda de contenção / perda de controle",
+        "top_event": "Perda de contenção",
         "barriers_mit": barriers_mit or ["Plano de emergência"],
-        "consequences": consequences or ["Dano ao processo"],
+        "consequences": consequences or["Dano ao processo"],
     }
 
 def ensure_bowtie_state(profile):
@@ -187,15 +176,11 @@ with st.sidebar:
         if manual_query.strip():
             st.session_state.profile = build_compound_profile(manual_query.strip())
 
-# Inicialização Básica
 if st.session_state.profile is None:
     load_profile_from_key(st.session_state.selected_compound_key)
 profile = st.session_state.profile
 ensure_bowtie_state(profile)
 
-# =========================
-# Hero & Processamento em Background
-# =========================
 st.markdown(
     f"""
     <div class="hero">
@@ -300,7 +285,7 @@ elif selected_module == t("module_eng", lang):
         c1, c2, c3, c4 = st.columns(4)
         c1.markdown(metric_card("Composto", profile.identity.get("name", "—")), unsafe_allow_html=True)
         c2.markdown(metric_card("CAS", profile.identity.get("cas", "—")), unsafe_allow_html=True)
-        c3.markdown(metric_card("Confiança", f"{profile.confidence_score:.0f}/100"), unsafe_allow_html=True)
+        c3.markdown(metric_card("Confiança do Pacote", f"{profile.confidence_score:.0f}/100"), unsafe_allow_html=True)
         c4.markdown(metric_card("Dispersão", dispersion_mode["label"]), unsafe_allow_html=True)
         
         left, right = st.columns(2)
@@ -311,13 +296,21 @@ elif selected_module == t("module_eng", lang):
             st.markdown("<div class='panel'><h3>Cobertura de fontes</h3></div>", unsafe_allow_html=True)
             st.pyplot(build_source_coverage_figure(profile), clear_figure=True)
 
-        st.markdown("<div class='panel'><h3>Status do pacote de propriedades</h3></div>", unsafe_allow_html=True)
-        status_summary = summarize_property_status(profile)
-        chips =[f"<span class='kpi-chip'>{k}: {v}</span>" for k, v in status_summary.items()]
-        st.markdown("".join(chips), unsafe_allow_html=True)
-        st.dataframe(build_property_status_df(profile), width="stretch", hide_index=True)
-
     with compound_tab:
+        # SPRINT 14: Calculadora Regulatória
+        st.markdown("<div class='panel'><h3>⚖️ Calculadora de Enquadramento Regulatório</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='note-card'>Verifica se a quantidade armazenada deste composto engatilha leis rigorosas (OSHA PSM, Seveso III, NR-20).</div><br>", unsafe_allow_html=True)
+        
+        inv_kg = st.number_input("Massa Armazenada na Planta (kg)", min_value=0.0, value=5000.0, step=500.0)
+        alerts = check_regulatory_framework(profile, inv_kg)
+        for alert in alerts:
+            if "Isento" in alert:
+                st.success(alert)
+            else:
+                st.warning(alert)
+                
+        st.markdown("<hr>", unsafe_allow_html=True)
+
         left, right = st.columns(2)
         with left:
             st.markdown("<div class='panel'><h3>Identidade e descritores</h3></div>", unsafe_allow_html=True)
@@ -341,8 +334,6 @@ elif selected_module == t("module_eng", lang):
 
         if st.session_state.compare_profile:
             st.dataframe(build_comparison_df(profile, st.session_state.compare_profile), width="stretch", hide_index=True)
-            for line in build_comparison_highlights(profile, st.session_state.compare_profile):
-                st.info(line)
 
     with reactivity_tab:
         st.markdown("<div class='panel'><h3>Reactivity Lab — Matriz de Substâncias</h3></div>", unsafe_allow_html=True)
@@ -359,11 +350,8 @@ elif selected_module == t("module_eng", lang):
             a, b, c = st.columns(3)
             a.markdown(metric_card("Composto A", summary["compound_a"]), unsafe_allow_html=True)
             b.markdown(metric_card("Composto B", summary["compound_b"]), unsafe_allow_html=True)
-            c.markdown(metric_card("Severidade da Mistura", summary["severity"], "risk-red" if summary["severity"] != "OK" else "risk-green"), unsafe_allow_html=True)
-            
-            st.markdown("<div class='panel'><h3>Regras Disparadas</h3></div>", unsafe_allow_html=True)
+            c.markdown(metric_card("Severidade", summary["severity"], "risk-red" if summary["severity"] != "OK" else "risk-green"), unsafe_allow_html=True)
             st.dataframe(res["hits_df"], width="stretch", hide_index=True)
-            for rec in res["recommendations"]: st.warning(rec)
 
     with sources_tab:
         st.markdown("<div class='panel'><h3>Governança de Fontes (Ledger)</h3></div>", unsafe_allow_html=True)
@@ -378,25 +366,30 @@ elif selected_module == t("module_risk", lang):
 
     with area_tab:
         st.markdown("<div class='panel'><h3>Segregação por Área de Risco</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'>O risco muda drasticamente dependendo do ambiente e volume. Selecione a área para obter diretrizes específicas.</div><br>", unsafe_allow_html=True)
         area_selected = st.selectbox("Selecione a Área de Instalação",["Laboratório", "Almoxarifado", "Sala de Cilindros", "Tanque", "Utilidades"])
-        
         area_data = evaluate_area_risk(profile, area_selected)
         col_w, col_s = st.columns(2)
         with col_w:
-            st.error("🚨 **Avisos de Segurança para esta área:**")
+            st.error("🚨 **Avisos de Segurança:**")
             for w in area_data["warnings"]: st.write(f"- {w}")
         with col_s:
-            st.success("🛡️ **Salvaguardas Mínimas Recomendadas:**")
+            st.success("🛡️ **Salvaguardas:**")
             for s in area_data["safeguards"]: st.write(f"- {s}")
 
     with hazop_tab:
-        st.markdown("<div class='panel'><h3>📚 Biblioteca de Cenários Típicos (Sprint 13)</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'>Com base nas propriedades, o sistema pré-carregou os cenários clássicos para acelerar sua análise.</div><br>", unsafe_allow_html=True)
-        
+        # SPRINT 14: Modo Facilitador
+        fac_on = st.toggle("🧠 Ativar Modo Facilitador / Treinamento")
+        if fac_on:
+            st.markdown("<div class='note-card'><b>Dicas para o Lider de HAZOP:</b> Faça estas perguntas para provocar a equipe e encontrar falhas ocultas.</div><br>", unsafe_allow_html=True)
+            questions = generate_facilitator_questions(profile)
+            for q in questions:
+                st.write(f"❓ {q}")
+            st.markdown("<hr>", unsafe_allow_html=True)
+
+        st.markdown("<div class='panel'><h3>📚 Biblioteca Universal de Cenários (Sprint 13)</h3></div>", unsafe_allow_html=True)
         typical_scenarios = get_typical_scenarios(profile)
         if not typical_scenarios:
-            st.info("Sem cenários críticos típicos atrelados a este perfil na base de dados.")
+            st.info("Sem cenários críticos atrelados à física deste composto.")
         else:
             for cenario in typical_scenarios:
                 with st.expander(cenario["titulo"]):
@@ -426,7 +419,6 @@ elif selected_module == t("module_risk", lang):
     with bowtie_tab:
         st.markdown("<div class='panel'><h3>Diagrama Bow-Tie Interativo</h3></div>", unsafe_allow_html=True)
         modo_bowtie = st.radio("Modo", ["Executivo", "Técnico"], horizontal=True)
-        
         c1, c2 = st.columns(2)
         with c1:
             st.text_area("Ameaças", key="bowtie_threats", height=120)
