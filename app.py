@@ -45,8 +45,9 @@ from area_engine import evaluate_area_risk
 from scenario_library import get_typical_scenarios
 from regulatory_engine import check_regulatory_framework, generate_facilitator_questions
 
-# MÓDULOS SPRINT 15
+# MÓDULOS SPRINT 15 e 16
 from map_visuals import render_map_in_streamlit
+from historical_engine import get_relevant_historical_cases
 
 APP_CSS = """
 <style>
@@ -64,6 +65,7 @@ APP_CSS = """
 .panel h3 { margin-top: 0; margin-bottom: 0.8rem; color: #f0f6ff; font-size: 1rem; font-weight: 800; }
 .note-card { background: rgba(12, 28, 54, 0.95); border-left: 4px solid #4b88ff; border-radius: 12px; padding: 0.9rem 1rem; color: #e9f1ff; }
 .kpi-chip { display: inline-block; padding: 0.28rem 0.65rem; border-radius: 999px; border: 1px solid #2b5aa1; margin-right: 0.45rem; margin-bottom: 0.35rem; color: #d9e8ff; background: rgba(31, 74, 139, 0.14); font-size: 0.78rem; }
+.history-card { background: rgba(18, 35, 61, 0.95); border-left: 5px solid #fbbf24; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
 </style>
 """
 
@@ -280,8 +282,9 @@ if selected_module == t("module_exec", lang):
 # MÓDULO 2: ENGENHARIA DE DADOS
 # ==============================================================================
 elif selected_module == t("module_eng", lang):
-    tabs = st.tabs(["Overview", t("tab_compound", lang), "Comparador", "Reatividade (Lab)", "Fontes / Evidências"])
-    overview_tab, compound_tab, compare_tab, reactivity_tab, sources_tab = tabs
+    # SPRINT 16: Adicionada a aba "Lições Históricas"
+    tabs = st.tabs(["Overview", t("tab_compound", lang), "Comparador", "Reatividade (Lab)", "Fontes / Evidências", "📚 Lições Históricas"])
+    overview_tab, compound_tab, compare_tab, reactivity_tab, sources_tab, history_tab = tabs
 
     with overview_tab:
         dispersion_mode = classify_dispersion_mode(profile)
@@ -300,7 +303,6 @@ elif selected_module == t("module_eng", lang):
             st.pyplot(build_source_coverage_figure(profile), clear_figure=True)
 
     with compound_tab:
-        # SPRINT 14: Calculadora Regulatória
         st.markdown("<div class='panel'><h3>⚖️ Calculadora de Enquadramento Regulatório</h3></div>", unsafe_allow_html=True)
         st.markdown("<div class='note-card'>Verifica se a quantidade armazenada deste composto engatilha leis rigorosas (OSHA PSM, Seveso III, NR-20).</div><br>", unsafe_allow_html=True)
         
@@ -360,6 +362,36 @@ elif selected_module == t("module_eng", lang):
         st.markdown("<div class='panel'><h3>Governança de Fontes (Ledger)</h3></div>", unsafe_allow_html=True)
         st.dataframe(build_evidence_ledger_df(profile), width="stretch", hide_index=True)
 
+    # NOVO: SPRINT 16
+    with history_tab:
+        st.markdown("<div class='panel'><h3>📚 Lições Históricas de Engenharia</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='note-card'>Base curada de acidentes da indústria química (CSB, HSE, etc.) selecionados automaticamente pelos perigos e propriedades físicas do composto atual.</div><br>", unsafe_allow_html=True)
+        
+        relevant_cases = get_relevant_historical_cases(profile)
+        
+        if not relevant_cases:
+            st.info("Nenhum evento histórico correlato encontrado para este perfil específico na base curada.")
+        else:
+            for case in relevant_cases:
+                st.markdown(f"<div class='history-card'>", unsafe_allow_html=True)
+                st.subheader(f"{case['evento']} ({case['ano']}) - {case['local']}")
+                st.caption(f"**Match do App:** {case['relevancia']} | **Fonte:** {case['fonte']} ({case['classe_fonte']})")
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.write(f"**Substância Envolvida:** {case['substancia_principal']} (CAS: {case['cas_associado']})")
+                    st.write(f"**Tipo de Evento:** {case['tipo_evento']}")
+                    st.write(f"**Mecanismo:** {case['mecanismo']}")
+                with c2:
+                    st.error(f"**Consequências:** {case['consequencias']}")
+                    st.warning("**Barreiras que Falharam:**")
+                    for b in case["barreiras_falharam"]: st.markdown(f"- {b}")
+                
+                st.success("**Lições Aprendidas (Inputs para seu MOC / HAZOP):**")
+                for l in case["licoes_aprendidas"]: st.markdown(f"- {l}")
+                
+                st.markdown("</div><hr>", unsafe_allow_html=True)
+
 # ==============================================================================
 # MÓDULO 3: ANÁLISE DE RISCO
 # ==============================================================================
@@ -380,7 +412,6 @@ elif selected_module == t("module_risk", lang):
             for s in area_data["safeguards"]: st.write(f"- {s}")
 
     with hazop_tab:
-        # SPRINT 14: Modo Facilitador
         fac_on = st.toggle("🧠 Ativar Modo Facilitador / Treinamento")
         if fac_on:
             st.markdown("<div class='note-card'><b>Dicas para o Lider de HAZOP:</b> Faça estas perguntas para provocar a equipe e encontrar falhas ocultas.</div><br>", unsafe_allow_html=True)
@@ -476,7 +507,6 @@ elif selected_module == t("module_risk", lang):
 
     with cons_tab:
         st.markdown("<div class='panel'><h3>Modelagem de Consequências</h3></div>", unsafe_allow_html=True)
-        # SPRINT 15: Adicionada a aba do Mapa de Impacto aqui!
         tox_t, fire_t, map_t = st.tabs(["Dispersão Tóxica (Gaussiana)", "Fogo em Poça (Pool Fire)", "🌍 Mapa de Impacto"])
         
         with tox_t:
