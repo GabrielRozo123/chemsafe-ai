@@ -45,6 +45,9 @@ from area_engine import evaluate_area_risk
 from scenario_library import get_typical_scenarios
 from regulatory_engine import check_regulatory_framework, generate_facilitator_questions
 
+# MÓDULOS SPRINT 15
+from map_visuals import render_map_in_streamlit
+
 APP_CSS = """
 <style>
 .stApp { background: linear-gradient(180deg, #07111f, #081a31); color: #e9f1ff; }
@@ -78,7 +81,7 @@ if "compare_query" not in st.session_state: st.session_state.compare_query = ""
 if "lopa_result" not in st.session_state: st.session_state.lopa_result = None
 if "dispersion_result" not in st.session_state: st.session_state.dispersion_result = None
 if "pool_fire_result" not in st.session_state: st.session_state.pool_fire_result = None
-if "selected_ipl_names" not in st.session_state: st.session_state.selected_ipl_names =[]
+if "selected_ipl_names" not in st.session_state: st.session_state.selected_ipl_names = []
 if "current_case_name" not in st.session_state: st.session_state.current_case_name = ""
 if "current_case_notes" not in st.session_state: st.session_state.current_case_notes = ""
 if "bowtie_initialized_for" not in st.session_state: st.session_state.bowtie_initialized_for = ""
@@ -97,24 +100,24 @@ def load_profile_from_key(key: str) -> None:
     st.session_state.selected_compound_key = key
 
 def _default_bowtie_lists(profile):
-    threats, barriers_pre, consequences, barriers_mit = [], [], [],[]
+    threats, barriers_pre, consequences, barriers_mit = [], [], [], []
     if profile.flags.get("flammable"):
-        threats +=["Fonte de ignição", "Vazamento"]
+        threats += ["Fonte de ignição", "Vazamento"]
         barriers_pre += ["Controle de ignição", "Detecção"]
-        consequences +=["Incêndio", "Flash fire"]
-        barriers_mit +=["Combate a incêndio", "Contenção"]
+        consequences += ["Incêndio", "Flash fire"]
+        barriers_mit += ["Combate a incêndio", "Contenção"]
     if profile.flags.get("toxic_inhalation"):
-        threats +=["Falha de vedação", "Abertura indevida"]
-        barriers_pre +=["Isolamento", "ESD"]
+        threats += ["Falha de vedação", "Abertura indevida"]
+        barriers_pre += ["Isolamento", "ESD"]
         consequences += ["Exposição ocupacional", "Impacto comunitário"]
-        barriers_mit +=["Alarme", "Evacuação"]
+        barriers_mit += ["Alarme", "Evacuação"]
     
     return {
-        "threats": threats or["Falha de equipamento"],
+        "threats": threats or ["Falha de equipamento"],
         "barriers_pre": barriers_pre or ["Procedimento operacional"],
         "top_event": "Perda de contenção",
         "barriers_mit": barriers_mit or ["Plano de emergência"],
-        "consequences": consequences or["Dano ao processo"],
+        "consequences": consequences or ["Dano ao processo"],
     }
 
 def ensure_bowtie_state(profile):
@@ -130,11 +133,11 @@ def ensure_bowtie_state(profile):
 
 def bowtie_payload():
     return {
-        "threats":[x.strip() for x in st.session_state.get("bowtie_threats", "").splitlines() if x.strip()],
-        "barriers_pre":[x.strip() for x in st.session_state.get("bowtie_pre", "").splitlines() if x.strip()],
+        "threats": [x.strip() for x in st.session_state.get("bowtie_threats", "").splitlines() if x.strip()],
+        "barriers_pre": [x.strip() for x in st.session_state.get("bowtie_pre", "").splitlines() if x.strip()],
         "top_event": st.session_state.get("bowtie_top", "Perda de contenção"),
-        "barriers_mit":[x.strip() for x in st.session_state.get("bowtie_mit", "").splitlines() if x.strip()],
-        "consequences":[x.strip() for x in st.session_state.get("bowtie_cons", "").splitlines() if x.strip()],
+        "barriers_mit": [x.strip() for x in st.session_state.get("bowtie_mit", "").splitlines() if x.strip()],
+        "consequences": [x.strip() for x in st.session_state.get("bowtie_cons", "").splitlines() if x.strip()],
     }
 
 def apply_loaded_case(case_data: dict):
@@ -262,7 +265,7 @@ if selected_module == t("module_exec", lang):
         col_save, col_load = st.columns([1, 1])
         with col_save:
             if st.button("Salvar Caso Atual", type="primary", width="stretch"):
-                save_case(case_name, profile, case_notes, st.session_state.get("lopa_result"), st.session_state.get("selected_ipl_names",[]), bowtie_payload(), st.session_state.get("moc_result"), st.session_state.get("pssr_result"), st.session_state.get("reactivity_result"))
+                save_case(case_name, profile, case_notes, st.session_state.get("lopa_result"), st.session_state.get("selected_ipl_names", []), bowtie_payload(), st.session_state.get("moc_result"), st.session_state.get("pssr_result"), st.session_state.get("reactivity_result"))
                 st.session_state.current_case_name = case_name
                 st.success("Salvo com sucesso!")
         
@@ -317,7 +320,7 @@ elif selected_module == t("module_eng", lang):
             st.dataframe(format_identity_df(profile), width="stretch", hide_index=True)
             st.markdown("<div class='panel'><h3>Perigos / GHS / Incompatibilidades</h3></div>", unsafe_allow_html=True)
             for hz in profile.hazards: st.error(hz)
-            for inc in profile.storage.get("incompatibilities",[]): st.warning(f"Incompatível: {inc}")
+            for inc in profile.storage.get("incompatibilities", []): st.warning(f"Incompatível: {inc}")
         with right:
             st.markdown("<div class='panel'><h3>Propriedades físico-químicas</h3></div>", unsafe_allow_html=True)
             st.dataframe(format_physchem_df(profile), width="stretch", hide_index=True)
@@ -366,7 +369,7 @@ elif selected_module == t("module_risk", lang):
 
     with area_tab:
         st.markdown("<div class='panel'><h3>Segregação por Área de Risco</h3></div>", unsafe_allow_html=True)
-        area_selected = st.selectbox("Selecione a Área de Instalação",["Laboratório", "Almoxarifado", "Sala de Cilindros", "Tanque", "Utilidades"])
+        area_selected = st.selectbox("Selecione a Área de Instalação", ["Laboratório", "Almoxarifado", "Sala de Cilindros", "Tanque", "Utilidades"])
         area_data = evaluate_area_risk(profile, area_selected)
         col_w, col_s = st.columns(2)
         with col_w:
@@ -401,12 +404,12 @@ elif selected_module == t("module_risk", lang):
         st.markdown("<br><div class='panel'><h3>Worksheet HAZOP Base</h3></div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1: param = st.selectbox("Parâmetro", list(HAZOP_DB.keys()))
-        with c2: guideword = st.selectbox("Palavra-guia",["MAIS", "MENOS", "NÃO / NENHUM"])
+        with c2: guideword = st.selectbox("Palavra-guia", ["MAIS", "MENOS", "NÃO / NENHUM"])
         
         db = HAZOP_DB.get(param, {}).get(guideword, {})
         if db:
-            rows =[]
-            for i, cause in enumerate(db.get("causas",[])):
+            rows = []
+            for i, cause in enumerate(db.get("causas", [])):
                 rows.append({
                     "Desvio": f"{guideword} {param}" if i == 0 else "idem",
                     "Causa": cause,
@@ -436,13 +439,13 @@ elif selected_module == t("module_risk", lang):
         left, right = st.columns(2)
         with left:
             f_ie = st.number_input("Frequência do Evento Iniciador (1/ano)", value=0.1, format="%.4f")
-            crit = st.selectbox("Critério de Risco",["Fatalidade — 1e-5", "Lesão Grave — 1e-4", "Lesão Leve — 1e-3"])
+            crit = st.selectbox("Critério de Risco", ["Fatalidade — 1e-5", "Lesão Grave — 1e-4", "Lesão Leve — 1e-3"])
             crit_val = {"Fatalidade — 1e-5": 1e-5, "Lesão Grave — 1e-4": 1e-4, "Lesão Leve — 1e-3": 1e-3}[crit]
         with right:
-            selected = st.multiselect("Selecione as IPLs",[f"{n} (PFD={p})" for n, p in IPL_CATALOG])
+            selected = st.multiselect("Selecione as IPLs", [f"{n} (PFD={p})" for n, p in IPL_CATALOG])
         
         if st.button("Calcular LOPA", type="primary"):
-            chosen =[(n, p) for label in selected for n, p in IPL_CATALOG if n in label]
+            chosen = [(n, p) for label in selected for n, p in IPL_CATALOG if n in label]
             st.session_state.selected_ipl_names = selected
             st.session_state.lopa_result = compute_lopa(f_ie, crit_val, chosen)
 
@@ -465,15 +468,16 @@ elif selected_module == t("module_risk", lang):
                 st.write("**Cenário Base (Atual)**")
                 st.write(f"MCF Atual: {base['mcf']:.2e}/ano")
             with c2:
-                new_ipls = st.multiselect("Modificar IPLs",[f"{n} (PFD={p})" for n, p in IPL_CATALOG], default=st.session_state.get("selected_ipl_names", []))
+                new_ipls = st.multiselect("Modificar IPLs", [f"{n} (PFD={p})" for n, p in IPL_CATALOG], default=st.session_state.get("selected_ipl_names", []))
                 if st.button("Simular"):
-                    chosen =[(n, p) for label in new_ipls for n, p in IPL_CATALOG if n in label]
+                    chosen = [(n, p) for label in new_ipls for n, p in IPL_CATALOG if n in label]
                     mod_lopa = compute_lopa(base["f_ie"], base["criterion"], chosen)
                     st.dataframe(build_what_if_comparison(base, mod_lopa), width="stretch", hide_index=True)
 
     with cons_tab:
         st.markdown("<div class='panel'><h3>Modelagem de Consequências</h3></div>", unsafe_allow_html=True)
-        tox_t, fire_t = st.tabs(["Dispersão Tóxica (Gaussiana)", "Fogo em Poça (Pool Fire)"])
+        # SPRINT 15: Adicionada a aba do Mapa de Impacto aqui!
+        tox_t, fire_t, map_t = st.tabs(["Dispersão Tóxica (Gaussiana)", "Fogo em Poça (Pool Fire)", "🌍 Mapa de Impacto"])
         
         with tox_t:
             c1, c2, c3 = st.columns(3)
@@ -493,6 +497,28 @@ elif selected_module == t("module_risk", lang):
                 st.session_state.pool_fire_result = pool_fire(diam, 0.05, 44000, dist)
                 st.write(f"**Fluxo Térmico no alvo:** {st.session_state.pool_fire_result['q_kW_m2']:.2f} kW/m²")
 
+        with map_t:
+            st.subheader("🌍 Análise Geoespacial de Impacto")
+            st.markdown("Visualize as zonas térmicas e tóxicas sobrepostas na instalação.")
+
+            col_lat, col_lon = st.columns(2)
+            with col_lat:
+                lat = st.number_input("Latitude", value=-22.8188, format="%.6f", help="Coordenada Y da origem do evento")
+            with col_lon:
+                lon = st.number_input("Longitude", value=-47.0635, format="%.6f", help="Coordenada X da origem do evento")
+
+            current_dispersion = st.session_state.get("dispersion_result", None)
+            current_thermal = st.session_state.get("pool_fire_result", None)
+
+            with st.expander("🗺️ Abrir Mapa de Impacto (Satélite)", expanded=True):
+                render_map_in_streamlit(
+                    lat=lat, 
+                    lon=lon, 
+                    dispersion_data=current_dispersion, 
+                    thermal_data=current_thermal
+                )
+                st.caption("*Use o controle de camadas no canto superior direito do mapa para alternar entre visão de Satélite e Mapa Claro para exportação.*")
+
 # ==============================================================================
 # MÓDULO 4: GESTÃO DE MUDANÇA
 # ==============================================================================
@@ -508,8 +534,8 @@ elif selected_module == t("module_change", lang):
         st.markdown("<div class='panel'><h3>Avaliação de Impacto de Mudança (MOC)</h3></div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            change_type = st.selectbox("Tipo de Mudança",["Mudança química / novo composto", "Mudança de condição operacional", "Mudança de equipamento", "Mudança de procedimento"])
-            impacts = st.multiselect("Impactos",["Química / composição", "Pressão", "Temperatura", "Inventário", "Alívio / PSV", "Instrumentação / controle"])
+            change_type = st.selectbox("Tipo de Mudança", ["Mudança química / novo composto", "Mudança de condição operacional", "Mudança de equipamento", "Mudança de procedimento"])
+            impacts = st.multiselect("Impactos", ["Química / composição", "Pressão", "Temperatura", "Inventário", "Alívio / PSV", "Instrumentação / controle"])
             desc = st.text_area("Descrição")
         with c2:
             st.write("Fatores Agravantes:")
