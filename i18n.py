@@ -40,4 +40,4 @@ DICT = {
 
 def t(key: str, lang: str = "pt") -> str:
     """Função que busca a tradução. Se não achar, retorna a própria chave."""
-    return DICT.get(lang, DICT["pt"]).get(key, key)v
+    return DICT.get(lang, DICT["pt"]).get(key, key)
