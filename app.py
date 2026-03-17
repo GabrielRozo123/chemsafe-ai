@@ -10,6 +10,7 @@ if str(ROOT_DIR) not in sys.path:
 import pandas as pd
 import streamlit as st
 
+# Módulos de Visualização e Armazenamento Antigos
 from bowtie_visual import build_bowtie_custom_figure
 from case_store import list_cases, load_case, save_case
 from chemicals_seed import LOCAL_COMPOUNDS
@@ -49,6 +50,11 @@ from source_governance import (
 from source_visuals import build_link_coverage_figure, build_source_summary_figure
 from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
 
+# NOVOS MÓDULOS SPRINT 11 (Ação, Executivo e What-if)
+from action_hub import build_consolidated_action_plan
+from dashboard_engine import calculate_case_readiness_index
+from dashboard_visuals import build_readiness_gauge_figure, build_components_figure
+from scenario_compare import build_what_if_comparison
 
 APP_CSS = """
 <style>
@@ -192,7 +198,7 @@ if "dispersion_result" not in st.session_state:
 if "pool_fire_result" not in st.session_state:
     st.session_state.pool_fire_result = None
 if "selected_ipl_names" not in st.session_state:
-    st.session_state.selected_ipl_names = []
+    st.session_state.selected_ipl_names =[]
 if "current_case_name" not in st.session_state:
     st.session_state.current_case_name = ""
 if "current_case_notes" not in st.session_state:
@@ -222,10 +228,8 @@ def metric_card(label: str, value: str, klass: str = "risk-blue") -> str:
         f"</div>"
     )
 
-
 def quick_compounds():
     return {k: v["identity"]["name"] for k, v in LOCAL_COMPOUNDS.items()}
-
 
 def load_profile_from_key(key: str) -> None:
     aliases = LOCAL_COMPOUNDS[key]["aliases"]
@@ -233,28 +237,27 @@ def load_profile_from_key(key: str) -> None:
     st.session_state.selected_compound_key = key
     st.session_state.profile = profile
 
-
 def _default_bowtie_lists(profile):
     threats = []
-    barriers_pre = []
+    barriers_pre =[]
     consequences = []
-    barriers_mit = []
+    barriers_mit =[]
 
     if profile.flags.get("flammable"):
         threats += ["Fonte de ignição", "Vazamento", "Ventilação insuficiente"]
         barriers_pre += ["Controle de ignição", "Detecção", "Aterramento"]
         consequences += ["Incêndio", "Flash fire", "Dano à instalação"]
-        barriers_mit += ["Combate a incêndio", "Contenção", "Plano de emergência"]
+        barriers_mit +=["Combate a incêndio", "Contenção", "Plano de emergência"]
 
     if profile.flags.get("toxic_inhalation"):
-        threats += ["Falha de vedação", "Abertura indevida", "Sobrepressão"]
-        barriers_pre += ["Isolamento", "ESD", "Inspeção"]
-        consequences += ["Exposição ocupacional", "Evacuação", "Impacto comunitário"]
-        barriers_mit += ["Alarme", "Evacuação", "Abatimento / ventilação"]
+        threats +=["Falha de vedação", "Abertura indevida", "Sobrepressão"]
+        barriers_pre +=["Isolamento", "ESD", "Inspeção"]
+        consequences +=["Exposição ocupacional", "Evacuação", "Impacto comunitário"]
+        barriers_mit +=["Alarme", "Evacuação", "Abatimento / ventilação"]
 
     if profile.flags.get("corrosive"):
-        threats += ["Corrosão", "Material incompatível"]
-        barriers_pre += ["Seleção de materiais", "Inspeção de integridade"]
+        threats +=["Corrosão", "Material incompatível"]
+        barriers_pre +=["Seleção de materiais", "Inspeção de integridade"]
         consequences += ["Perda de contenção", "Dano a equipamento"]
         barriers_mit += ["Chuveiro / lava-olhos", "Containment"]
 
@@ -264,13 +267,13 @@ def _default_bowtie_lists(profile):
     barriers_mit = list(dict.fromkeys(barriers_mit))[:5]
 
     if not threats:
-        threats = ["Desvio operacional", "Falha de válvula", "Falha de instrumentação"]
+        threats =["Desvio operacional", "Falha de válvula", "Falha de instrumentação"]
     if not barriers_pre:
-        barriers_pre = ["Procedimento operacional", "Inspeção", "Alarme"]
+        barriers_pre =["Procedimento operacional", "Inspeção", "Alarme"]
     if not consequences:
         consequences = ["Perda de contenção", "Parada de processo", "Exposição ocupacional"]
     if not barriers_mit:
-        barriers_mit = ["Evacuação", "Resposta à emergência", "Containment"]
+        barriers_mit =["Evacuação", "Resposta à emergência", "Containment"]
 
     return {
         "threats": threats,
@@ -279,7 +282,6 @@ def _default_bowtie_lists(profile):
         "barriers_mit": barriers_mit,
         "consequences": consequences,
     }
-
 
 def ensure_bowtie_state(profile):
     compound_marker = profile.identity.get("name", "")
@@ -292,16 +294,14 @@ def ensure_bowtie_state(profile):
         st.session_state.bowtie_cons = "\n".join(defaults["consequences"])
         st.session_state.bowtie_initialized_for = compound_marker
 
-
 def bowtie_payload():
     return {
-        "threats": [x.strip() for x in st.session_state.get("bowtie_threats", "").splitlines() if x.strip()],
-        "barriers_pre": [x.strip() for x in st.session_state.get("bowtie_pre", "").splitlines() if x.strip()],
+        "threats":[x.strip() for x in st.session_state.get("bowtie_threats", "").splitlines() if x.strip()],
+        "barriers_pre":[x.strip() for x in st.session_state.get("bowtie_pre", "").splitlines() if x.strip()],
         "top_event": st.session_state.get("bowtie_top", "Perda de contenção / perda de controle"),
-        "barriers_mit": [x.strip() for x in st.session_state.get("bowtie_mit", "").splitlines() if x.strip()],
-        "consequences": [x.strip() for x in st.session_state.get("bowtie_cons", "").splitlines() if x.strip()],
+        "barriers_mit":[x.strip() for x in st.session_state.get("bowtie_mit", "").splitlines() if x.strip()],
+        "consequences":[x.strip() for x in st.session_state.get("bowtie_cons", "").splitlines() if x.strip()],
     }
-
 
 def apply_loaded_case(case_data: dict):
     query_hint = case_data.get("query_hint") or case_data.get("compound_name")
@@ -312,7 +312,7 @@ def apply_loaded_case(case_data: dict):
 
     st.session_state.current_case_name = case_data.get("case_name", "")
     st.session_state.current_case_notes = case_data.get("notes", "")
-    st.session_state.selected_ipl_names = case_data.get("selected_ipl_names", [])
+    st.session_state.selected_ipl_names = case_data.get("selected_ipl_names",[])
     st.session_state.lopa_result = case_data.get("lopa_result")
     st.session_state.moc_result = case_data.get("moc_result")
     st.session_state.pssr_result = case_data.get("pssr_result")
@@ -320,11 +320,11 @@ def apply_loaded_case(case_data: dict):
 
     bowtie = case_data.get("bowtie", {})
     if bowtie:
-        st.session_state.bowtie_threats = "\n".join(bowtie.get("threats", []))
-        st.session_state.bowtie_pre = "\n".join(bowtie.get("barriers_pre", []))
+        st.session_state.bowtie_threats = "\n".join(bowtie.get("threats",[]))
+        st.session_state.bowtie_pre = "\n".join(bowtie.get("barriers_pre",[]))
         st.session_state.bowtie_top = bowtie.get("top_event", "Perda de contenção / perda de controle")
-        st.session_state.bowtie_mit = "\n".join(bowtie.get("barriers_mit", []))
-        st.session_state.bowtie_cons = "\n".join(bowtie.get("consequences", []))
+        st.session_state.bowtie_mit = "\n".join(bowtie.get("barriers_mit",[]))
+        st.session_state.bowtie_cons = "\n".join(bowtie.get("consequences",[]))
         if st.session_state.profile is not None:
             st.session_state.bowtie_initialized_for = st.session_state.profile.identity.get("name", "")
 
@@ -381,16 +381,13 @@ st.markdown(
       <h1>ChemSafe Pro Deterministic</h1>
       <p>Segurança de processo guiada por propriedades reais, fontes rastreáveis e lógica de decisão transparente.</p>
       <div>
+        <span class="badge">Executivo & Decisão</span>
         <span class="badge">Busca universal</span>
-        <span class="badge">Pacote curado + ao vivo</span>
         <span class="badge">Governança de fontes</span>
-        <span class="badge">HAZOP</span>
-        <span class="badge">LOPA</span>
+        <span class="badge">HAZOP / LOPA</span>
         <span class="badge">PSI / PSM</span>
-        <span class="badge">MOC</span>
-        <span class="badge">PSSR</span>
+        <span class="badge">MOC / PSSR</span>
         <span class="badge">Reatividade</span>
-        <span class="badge">Relatório executivo</span>
       </div>
     </div>
     """,
@@ -399,11 +396,139 @@ st.markdown(
 
 
 # =========================
-# Tabs
+# Tabs de Navegação (Sprint 11 incluído)
 # =========================
-overview_tab, compound_tab, sources_tab, compare_tab, reactivity_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, moc_tab, pssr_tab, consequence_tab, report_tab, refs_tab, cases_tab = st.tabs(
-    ["Overview", "Composto", "Fontes / Evidências", "Comparador", "Reatividade", "HAZOP", "Bow-Tie", "LOPA", "PSI / PSM", "MOC", "PSSR", "Consequências", "Relatório", "Referências", "Casos"]
-)
+tabs = st.tabs([
+    "Dashboard Executivo", "Plano de Ação", "What-If", "Overview", "Composto", 
+    "Fontes / Evidências", "Comparador", "Reatividade", "HAZOP", "Bow-Tie", 
+    "LOPA", "PSI / PSM", "MOC", "PSSR", "Consequências", "Relatório", "Referências", "Casos"
+])
+(dash_tab, action_plan_tab, whatif_tab, overview_tab, compound_tab, sources_tab, compare_tab, 
+ reactivity_tab, hazop_tab, bowtie_tab, lopa_tab, psi_tab, moc_tab, pssr_tab, consequence_tab, 
+ report_tab, refs_tab, cases_tab) = tabs
+
+
+# =========================
+# DASHBOARD EXECUTIVO
+# =========================
+with dash_tab:
+    st.markdown("<div class='panel'><h3>Case Readiness Index (CRI)</h3></div>", unsafe_allow_html=True)
+    
+    # Processamento silencioso do PSI para alimentar o Dashboard Executivo
+    psi_df_dash = build_psi_readiness_df(
+        profile=profile,
+        lopa_result=st.session_state.get("lopa_result"),
+        bowtie=bowtie_payload(),
+    )
+    psi_summary_dash = summarize_psi_readiness(psi_df_dash)
+    
+    # Motor Central do Case Readiness (Sprint 11)
+    cri_data = calculate_case_readiness_index(
+        profile=profile,
+        psi_summary=psi_summary_dash,
+        moc_result=st.session_state.get("moc_result"),
+        pssr_result=st.session_state.get("pssr_result"),
+        lopa_result=st.session_state.get("lopa_result"),
+        reactivity_result=st.session_state.get("reactivity_result")
+    )
+    
+    # Motor do Plano de Ação Central (Sprint 11)
+    action_df_dash = build_consolidated_action_plan(
+        profile, psi_df_dash, st.session_state.get("moc_result"), st.session_state.get("pssr_result"), st.session_state.get("reactivity_result")
+    )
+    
+    # Layout Executivo (Cards)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(metric_card("Readiness Global", f"{cri_data['index']}%", cri_data['color_class']), unsafe_allow_html=True)
+    c2.markdown(metric_card("Status do Caso", cri_data['band'], cri_data['color_class']), unsafe_allow_html=True)
+    
+    num_acoes = len(action_df_dash)
+    c3.markdown(metric_card("Ações Abertas", str(num_acoes), "risk-amber" if num_acoes > 0 else "risk-green"), unsafe_allow_html=True)
+    
+    gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])]) if num_acoes > 0 else 0
+    c4.markdown(metric_card("Gaps Críticos", str(gaps_criticos), "risk-red" if gaps_criticos > 0 else "risk-green"), unsafe_allow_html=True)
+    
+    # Layout Executivo (Visões)
+    left, right = st.columns(2)
+    with left:
+        st.markdown("<div class='panel'><h3>Maturidade Global do Caso</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_readiness_gauge_figure(cri_data), clear_figure=True)
+        
+    with right:
+        st.markdown("<div class='panel'><h3>Desempenho por Pilar</h3></div>", unsafe_allow_html=True)
+        st.pyplot(build_components_figure(cri_data), clear_figure=True)
+
+
+# =========================
+# PLANO DE AÇÃO
+# =========================
+with action_plan_tab:
+    st.markdown("<div class='panel'><h3>Hub de Ações Consolidadas (Action Plan)</h3></div>", unsafe_allow_html=True)
+    
+    if action_df_dash.empty:
+        st.success("🎉 Nenhuma ação pendente! O cenário está muito bem documentado e sem gaps críticos identificados nas análises atuais.")
+    else:
+        st.markdown("<div class='note-card'>Esta aba consolida, prioriza e monitora todas as pendências identificadas nos módulos de Governança, PSI, PSSR, MOC e Reatividade.</div><br>", unsafe_allow_html=True)
+        
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            filter_origem = st.multiselect("Filtrar por Origem", options=action_df_dash["Origem"].unique())
+        with col_f2:
+            filter_crit = st.multiselect("Filtrar por Criticidade", options=action_df_dash["Criticidade"].unique())
+        
+        filtered_df = action_df_dash.copy()
+        if filter_origem:
+            filtered_df = filtered_df[filtered_df["Origem"].isin(filter_origem)]
+        if filter_crit:
+            filtered_df = filtered_df[filtered_df["Criticidade"].isin(filter_crit)]
+        
+        st.dataframe(filtered_df, width="stretch", hide_index=True)
+
+
+# =========================
+# WHAT-IF / COMPARADOR
+# =========================
+with whatif_tab:
+    st.markdown("<div class='panel'><h3>What-If — Simulação de Camadas de Proteção</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='note-card'>Simule o impacto de adicionar ou remover IPLs no MCF e no SIL sem alterar o caso salvo na aba original. Ideal para justificar investimentos de engenharia (CAPEX).</div>", unsafe_allow_html=True)
+    
+    base_lopa = st.session_state.get("lopa_result")
+    
+    if not base_lopa:
+        st.info("⚠️ Calcule um caso base na aba 'LOPA' primeiro para habilitar o comparador What-If.")
+    else:
+        left, right = st.columns(2)
+        
+        with left:
+            st.markdown("<div class='panel'><h3>Cenário Base (Atual)</h3></div>", unsafe_allow_html=True)
+            st.write(f"**Frequência Iniciadora (F_ie):** {base_lopa.get('f_ie'):.2e}/ano")
+            st.write(f"**Frequência Mitigada Atual (MCF):** {base_lopa.get('mcf'):.2e}/ano")
+            st.write(f"**SIL Requerido Atual:** {base_lopa.get('sil')}")
+            st.write("<br>**IPLs Presentes no Caso Base:**", unsafe_allow_html=True)
+            for ipl in base_lopa.get("selected_ipls",[]):
+                st.caption(f"• {ipl[0]} (PFD = {ipl[1]})")
+                
+        with right:
+            st.markdown("<div class='panel'><h3>Simulação de Novo Investimento</h3></div>", unsafe_allow_html=True)
+            new_ipls = st.multiselect(
+                "Adicionar ou Remover IPLs para a simulação",
+                options=[f"{n} (PFD={p})" for n, p in IPL_CATALOG],
+                default=st.session_state.get("selected_ipl_names",[]),
+                key="what_if_ipls_select"
+            )
+            
+            if st.button("Simular Cenário", type="primary"):
+                chosen =[]
+                for label in new_ipls:
+                    for name, pfd in IPL_CATALOG:
+                        if name in label:
+                            chosen.append((name, pfd))
+                            break
+                mod_lopa = compute_lopa(base_lopa["f_ie"], base_lopa["criterion"], chosen)
+                
+                comp_df = build_what_if_comparison(base_lopa, mod_lopa)
+                st.markdown("<br><b>Comparação Executiva:</b>", unsafe_allow_html=True)
+                st.dataframe(comp_df, width="stretch", hide_index=True)
 
 
 # =========================
@@ -444,7 +569,7 @@ with overview_tab:
 
     st.markdown("<div class='panel'><h3>Status do pacote de propriedades</h3></div>", unsafe_allow_html=True)
     status_summary = summarize_property_status(profile)
-    chips = [f"<span class='kpi-chip'>{k}: {v}</span>" for k, v in status_summary.items()]
+    chips =[f"<span class='kpi-chip'>{k}: {v}</span>" for k, v in status_summary.items()]
     st.markdown("".join(chips), unsafe_allow_html=True)
     st.dataframe(build_property_status_df(profile), width="stretch", hide_index=True)
 
@@ -491,7 +616,7 @@ with compound_tab:
 
         st.markdown("<div class='panel'><h3>Incompatibilidades / armazenamento</h3></div>", unsafe_allow_html=True)
         incompat = profile.storage.get("incompatibilities", [])
-        notes = profile.storage.get("notes", [])
+        notes = profile.storage.get("notes",[])
         if incompat:
             for item in incompat:
                 st.warning(item)
@@ -505,7 +630,7 @@ with compound_tab:
     st.pyplot(build_incompatibility_matrix_figure(profile), clear_figure=True)
 
     st.markdown("<div class='panel'><h3>Links oficiais</h3></div>", unsafe_allow_html=True)
-    links = profile.storage.get("official_links", [])
+    links = profile.storage.get("official_links",[])
     link_cols = st.columns(3)
     for i, item in enumerate(links):
         with link_cols[i % 3]:
@@ -618,7 +743,7 @@ with reactivity_tab:
             metric_card(
                 "Severidade",
                 summary["severity"],
-                "risk-green" if summary["severity"] == "OK" else "risk-amber" if summary["severity"] in ["Revisar", "Cuidado"] else "risk-red",
+                "risk-green" if summary["severity"] == "OK" else "risk-amber" if summary["severity"] in["Revisar", "Cuidado"] else "risk-red",
             ),
             unsafe_allow_html=True,
         )
@@ -664,8 +789,7 @@ with reactivity_tab:
 # =========================
 with hazop_tab:
     equipment = st.selectbox(
-        "Equipamento / nó",
-        [
+        "Equipamento / nó",[
             "Tanque atmosférico",
             "Reator CSTR exotérmico",
             "Vaso de pressão",
@@ -697,11 +821,11 @@ with hazop_tab:
     guideword = st.selectbox("Palavra-guia", ["MAIS", "MENOS", "NÃO / NENHUM"])
     db = HAZOP_DB.get(param, {}).get(guideword, {})
     if db:
-        rows = []
+        rows =[]
         causes = db.get("causas", [])
-        cons = db.get("conseqs", [])
+        cons = db.get("conseqs",[])
         sav = db.get("salvags", [])
-        rec = db.get("rec", [])
+        rec = db.get("rec",[])
         for i, cause in enumerate(causes):
             rows.append(
                 {
@@ -772,8 +896,7 @@ with lopa_tab:
     with left:
         f_ie = st.number_input("Frequência do evento iniciador (1/ano)", value=0.1, min_value=0.000001, format="%.6f")
         criterion_label = st.selectbox(
-            "Critério tolerável",
-            [
+            "Critério tolerável",[
                 "Fatalidade / catástrofe ambiental — 1e-5/ano",
                 "Lesão grave / dano severo — 1e-4/ano",
                 "Lesão moderada — 1e-3/ano",
@@ -793,8 +916,8 @@ with lopa_tab:
         )
 
     if st.button("Calcular LOPA / SIL", type="primary"):
-        chosen = []
-        selected_names = []
+        chosen =[]
+        selected_names =[]
         for label in selected:
             selected_names.append(label)
             for name, pfd in IPL_CATALOG:
@@ -815,7 +938,7 @@ with lopa_tab:
         st.dataframe(pd.DataFrame(r["selected_ipls"], columns=["IPL", "PFD"]), width="stretch", hide_index=True)
 
         st.markdown("<div class='panel'><h3>Panorama das camadas de proteção</h3></div>", unsafe_allow_html=True)
-        selected_names = st.session_state.get("selected_ipl_names", [])
+        selected_names = st.session_state.get("selected_ipl_names",[])
         st.pyplot(build_ipl_layers_figure(selected_names, suggested_ipls), clear_figure=True)
 
 
@@ -825,6 +948,7 @@ with lopa_tab:
 with psi_tab:
     st.markdown("<div class='panel'><h3>PSI / PSM Readiness do caso</h3></div>", unsafe_allow_html=True)
 
+    # Calculado dinamicamente para o App
     psi_df = build_psi_readiness_df(
         profile=profile,
         lopa_result=st.session_state.get("lopa_result"),
@@ -837,7 +961,7 @@ with psi_tab:
         metric_card(
             "Score PSI / PSM",
             f"{psi_summary['score']:.0f}/100",
-            "risk-green" if psi_summary["score"] >= 80 else "risk-amber" if psi_summary["score"] >= 50 else "risk-red",
+            "risk-green" if psi_summary['score'] >= 80 else "risk-amber" if psi_summary['score'] >= 50 else "risk-red",
         ),
         unsafe_allow_html=True,
     )
@@ -877,8 +1001,7 @@ with moc_tab:
     c1, c2 = st.columns(2)
     with c1:
         change_type = st.selectbox(
-            "Tipo principal de mudança",
-            [
+            "Tipo principal de mudança",[
                 "Mudança química / novo composto",
                 "Mudança de condição operacional",
                 "Mudança de equipamento / material",
@@ -890,8 +1013,7 @@ with moc_tab:
         )
 
         impacts = st.multiselect(
-            "Aspectos impactados",
-            [
+            "Aspectos impactados",[
                 "Química / composição",
                 "Pressão",
                 "Temperatura",
@@ -954,7 +1076,7 @@ with moc_tab:
             metric_card(
                 "Classe",
                 summary["category"],
-                "risk-green" if summary["category"] == "Baixa" else "risk-amber" if summary["category"] in ["Moderada", "Alta"] else "risk-red",
+                "risk-green" if summary["category"] == "Baixa" else "risk-amber" if summary["category"] in["Moderada", "Alta"] else "risk-red",
             ),
             unsafe_allow_html=True,
         )
@@ -995,7 +1117,7 @@ with pssr_tab:
 
     c1, c2 = st.columns(2)
     with c1:
-        scope_label = st.selectbox("Escopo do PSSR", ["PHA para nova instalação", "MOC para instalação modificada"])
+        scope_label = st.selectbox("Escopo do PSSR",["PHA para nova instalação", "MOC para instalação modificada"])
         design_ok = st.checkbox("Construção/equipamento conforme especificação de projeto")
         procedures_ok = st.checkbox("Procedimentos de segurança/operação/manutenção/emergência adequados")
         training_ok = st.checkbox("Treinamento concluído para os envolvidos")
@@ -1054,7 +1176,7 @@ with pssr_tab:
 
         with right:
             st.markdown("<div class='panel'><h3>Bloqueadores de partida</h3></div>", unsafe_allow_html=True)
-            blockers = pssr_result.get("blockers", [])
+            blockers = pssr_result.get("blockers",[])
             if blockers:
                 for item in blockers:
                     st.error(item)
@@ -1108,9 +1230,8 @@ with consequence_tab:
             if st.session_state.dispersion_result:
                 r = st.session_state.dispersion_result
                 st.dataframe(
-                    pd.DataFrame(
-                        [
-                            {"Item": "Distância até IDLH", "Valor": f"{r['x_idlh']} m" if r["x_idlh"] else "> 3 km"},
+                    pd.DataFrame([
+                            {"Item": "Distância até IDLH", "Valor": f"{r['x_idlh']} m" if r['x_idlh'] else "> 3 km"},
                             {"Item": "Concentração a 100 m", "Valor": f"{r['c_at_100m']:.4f} g/m³"},
                         ]
                     ),
@@ -1135,8 +1256,7 @@ with consequence_tab:
             if st.session_state.pool_fire_result:
                 r = st.session_state.pool_fire_result
                 st.dataframe(
-                    pd.DataFrame(
-                        [
+                    pd.DataFrame([
                             {"Item": "Altura da chama", "Valor": f"{r['Hf_m']:.1f} m"},
                             {"Item": "Poder emissivo", "Valor": f"{r['E_kW_m2']:.1f} kW/m²"},
                             {"Item": "Fluxo no alvo", "Valor": f"{r['q_kW_m2']:.2f} kW/m²"},
@@ -1223,7 +1343,7 @@ with refs_tab:
     st.dataframe(pd.DataFrame(profile.source_trace), width="stretch", hide_index=True)
 
     st.markdown("<div class='panel'><h3>Links oficiais</h3></div>", unsafe_allow_html=True)
-    for item in profile.storage.get("official_links", []):
+    for item in profile.storage.get("official_links",[]):
         st.link_button(f"{item['source']} — {item['purpose']}", item["url"], width="stretch")
 
 
@@ -1248,7 +1368,7 @@ with cases_tab:
                 profile=profile,
                 notes=case_notes,
                 lopa_result=st.session_state.get("lopa_result"),
-                selected_ipl_names=st.session_state.get("selected_ipl_names", []),
+                selected_ipl_names=st.session_state.get("selected_ipl_names",[]),
                 bowtie=bowtie_payload(),
                 moc_result=st.session_state.get("moc_result"),
                 pssr_result=st.session_state.get("pssr_result"),
