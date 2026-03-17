@@ -10,3 +10,5 @@ markdown2>=2.5.0
 requests>=2.31
 matplotlib>=3.8
 beautifulsoup4>=4.12
+folium>=0.15.0
+streamlit-folium>=0.18.0
