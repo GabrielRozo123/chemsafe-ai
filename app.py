@@ -6,6 +6,7 @@ import io
 import math
 import re
 import time
+import textwrap
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
@@ -1240,16 +1241,22 @@ def _html_list(items):
 
 def _html_inputs(inputs: dict | None):
     if not inputs:
-        return "<div class='evidence-input-item'><div class='evidence-input-label'>Entrada</div><div class='evidence-input-value'>—</div></div>"
+        return (
+            "<div class='evidence-input-item'>"
+            "<div class='evidence-input-label'>Entrada</div>"
+            "<div class='evidence-input-value'>—</div>"
+            "</div>"
+        )
+
     blocks = []
     for k, v in inputs.items():
         blocks.append(
-            f"""
-            <div class='evidence-input-item'>
-                <div class='evidence-input-label'>{normalize_whitespace(str(k))}</div>
-                <div class='evidence-input-value'>{normalize_whitespace(str(v))}</div>
-            </div>
-            """
+            (
+                "<div class='evidence-input-item'>"
+                f"<div class='evidence-input-label'>{normalize_whitespace(str(k))}</div>"
+                f"<div class='evidence-input-value'>{normalize_whitespace(str(v))}</div>"
+                "</div>"
+            )
         )
     return "".join(blocks)
 
@@ -1270,45 +1277,46 @@ def render_evidence_panel(
     formula_html = normalize_whitespace(formula) if formula else "—"
     note_html = normalize_whitespace(note) if note else "Sem observações adicionais."
 
-    st.markdown(
-        f"""
-        <div class="evidence-panel">
-            <div class="evidence-kicker">Painel de Evidências por Cálculo</div>
-            <div class="evidence-title">{title}</div>
-            <div class="evidence-sub">{purpose}</div>
-            <div class="evidence-grid">
-                <div class="evidence-card">
-                    <h4>Método e Referências</h4>
-                    <ul>
-                        <li><strong>Método:</strong> {normalize_whitespace(method)}</li>
-                        {refs_html}
-                    </ul>
-                </div>
-                <div class="evidence-card">
-                    <h4>Entradas Relevantes</h4>
-                    <div class="evidence-inputs">
-                        {inputs_html}
-                    </div>
-                </div>
-                <div class="evidence-card">
-                    <h4>Hipóteses / Limites</h4>
-                    <ul>
-                        {assumptions_html}
-                    </ul>
-                </div>
-                <div class="evidence-card">
-                    <h4>Expressão / Lógica</h4>
-                    <div class="evidence-code">{formula_html}</div>
-                </div>
-            </div>
-            <div class="evidence-card" style="margin-top:14px;">
-                <h4>Observação de Aplicabilidade</h4>
-                <ul><li>{note_html}</li></ul>
-            </div>
+    html = f"""
+<div class="evidence-panel">
+    <div class="evidence-kicker">Painel de Evidências por Cálculo</div>
+    <div class="evidence-title">{title}</div>
+    <div class="evidence-sub">{purpose}</div>
+
+    <div class="evidence-grid">
+        <div class="evidence-card">
+            <h4>Método e Referências</h4>
+            <ul>
+                <li><strong>Método:</strong> {normalize_whitespace(method)}</li>
+                {refs_html}
+            </ul>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+
+        <div class="evidence-card">
+            <h4>Entradas Relevantes</h4>
+            <div class="evidence-inputs">{inputs_html}</div>
+        </div>
+
+        <div class="evidence-card">
+            <h4>Hipóteses / Limites</h4>
+            <ul>
+                {assumptions_html}
+            </ul>
+        </div>
+
+        <div class="evidence-card">
+            <h4>Expressão / Lógica</h4>
+            <div class="evidence-code">{formula_html}</div>
+        </div>
+    </div>
+
+    <div class="evidence-card" style="margin-top:14px;">
+        <h4>Observação de Aplicabilidade</h4>
+        <ul><li>{note_html}</li></ul>
+    </div>
+</div>
+"""
+    st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
 
 
 MENU_STYLES = {
