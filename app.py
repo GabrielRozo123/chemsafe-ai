@@ -12,7 +12,8 @@ if str(ROOT_DIR) not in sys.path:
 import pandas as pd
 import streamlit as st
 import graphviz
-import plotly.graph_objects as go # NOVO: Importado diretamente aqui
+import plotly.graph_objects as go
+from streamlit_option_menu import option_menu # NOVO: O Segredo do Visual Vale do Silício
 
 # Módulos Antigos e Ferramentas Visuais
 from bowtie_visual import build_bowtie_custom_figure
@@ -49,13 +50,15 @@ from psv_engine import size_psv_gas
 from ml_reliability_engine import calculate_dynamic_pfd
 from runaway_engine import calculate_tmr_adiabatic
 
-# CSS: Interface Vale do Silício
+# MÓDULOS SPRINT 20 (Visual Plotly)
+from plotly_visuals import build_executive_gauge, build_radar_chart, build_plant_layout_heatmap
+
 APP_CSS = """
 <style>
 :root { --bg-color: #0b0f19; --card-bg: #151b28; --border-color: #2a3441; --text-main: #d1d5db; --accent-blue: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.15); }
 .stApp { background-color: var(--bg-color); color: var(--text-main); font-family: 'Inter', -apple-system, sans-serif; }
 .block-container { padding-top: 1.5rem; padding-bottom: 3rem; max-width: 1440px; }
-.context-header { background: var(--card-bg); border: 1px solid var(--border-color); padding: 15px 25px; border-radius: 12px; margin-bottom: 30px; font-weight: 500; font-size: 0.95rem; color: #9ca3af; display: flex; justify-content: space-between; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+.context-header { background: var(--card-bg); border: 1px solid var(--border-color); padding: 15px 25px; border-radius: 12px; margin-bottom: 25px; font-weight: 500; font-size: 0.95rem; color: #9ca3af; display: flex; justify-content: space-between; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
 .context-header span { color: #fff; font-weight: 600; }
 .panel { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.8rem; margin-bottom: 1.2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.15); transition: border-color 0.3s ease; }
 .panel:hover { border-color: var(--accent-blue); box-shadow: 0 4px 20px var(--accent-glow); }
@@ -74,7 +77,7 @@ st.set_page_config(page_title="ChemSafe Pro Enterprise", page_icon="⚗️", lay
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# FUNÇÕES PLOTLY EMBUTIDAS (Design Premium)
+# FUNÇÕES PLOTLY EMBUTIDAS (Design Premium) E OPÇÕES DE MENU
 # ==============================================================================
 def render_modern_gauge(score, band):
     color = "#10b981" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
@@ -88,11 +91,7 @@ def render_modern_gauge(score, band):
             'bar': {'color': color},
             'bgcolor': "rgba(255,255,255,0.05)",
             'borderwidth': 0,
-            'steps': [
-                {'range': [0, 50], 'color': "rgba(239, 68, 68, 0.15)"},
-                {'range': [50, 80], 'color': "rgba(245, 158, 11, 0.15)"},
-                {'range': [80, 100], 'color': "rgba(16, 185, 129, 0.15)"}
-            ]
+            'steps': [{'range': [0, 50], 'color': "rgba(239, 68, 68, 0.15)"}, {'range': [50, 80], 'color': "rgba(245, 158, 11, 0.15)"}, {'range': [80, 100], 'color': "rgba(16, 185, 129, 0.15)"}]
         }
     ))
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", font={'family': "Inter"}, margin=dict(t=30, b=10, l=10, r=10), height=250)
@@ -102,26 +101,30 @@ def render_modern_radar(cri_data):
     base = cri_data.get('index', 50)
     categories = ['Engenharia e Dados', 'Análise de Perigos', 'LOPA & Barreiras', 'MOC & Governança']
     values = [min(100, base + 12), min(100, base - 5), min(100, base + 8), min(100, base - 10)]
-    
     categories.append(categories[0])
     values.append(values[0])
 
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(
         r=values, theta=categories, fill='toself',
-        fillcolor='rgba(59, 130, 246, 0.3)', line=dict(color='#3b82f6', width=2),
-        marker=dict(color='#ffffff', size=6)
+        fillcolor='rgba(59, 130, 246, 0.3)', line=dict(color='#3b82f6', width=2), marker=dict(color='#ffffff', size=6)
     ))
     fig.update_layout(
         polar=dict(
             radialaxis=dict(visible=True, range=[0, 100], color="#6b7280", gridcolor="#30363d", linecolor="rgba(0,0,0,0)"),
-            angularaxis=dict(color="#d1d5db", gridcolor="#30363d", linecolor="rgba(0,0,0,0)"),
-            bgcolor="rgba(0,0,0,0)"
+            angularaxis=dict(color="#d1d5db", gridcolor="#30363d", linecolor="rgba(0,0,0,0)"), bgcolor="rgba(0,0,0,0)"
         ),
-        showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(t=20, b=20, l=40, r=40), height=250
+        showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(t=20, b=20, l=40, r=40), height=250
     )
     return fig
+
+# ESTILO UNIFICADO PARA OS MENUS HORIZONTAIS
+MENU_STYLES = {
+    "container": {"padding": "5px", "background-color": "#151b28", "border": "1px solid #2a3441", "border-radius": "10px", "margin-bottom": "20px"},
+    "icon": {"color": "#9ca3af", "font-size": "16px"},
+    "nav-link": {"font-size": "14px", "text-align": "center", "margin": "0px", "color": "#9ca3af", "font-weight": "500", "font-family": "Inter"},
+    "nav-link-selected": {"background-color": "#3b82f6", "color": "white", "font-weight": "600"},
+}
 
 # =========================
 # Estado da sessão
@@ -164,17 +167,23 @@ def apply_loaded_case(case_data: dict):
 # Sidebar & Navegação
 # =========================
 with st.sidebar:
-    lang = st.radio("🌐 Language / Idioma", ["pt", "en"], horizontal=True, label_visibility="collapsed")
+    lang = st.radio("🌐 Idioma", ["pt", "en"], horizontal=True, label_visibility="collapsed")
     st.session_state.lang = lang
     
     st.markdown(f"## ⚗️ {t('app_title', lang)}\n**Enterprise Edition**")
     st.caption("Process Safety Intelligence Engine")
     st.markdown("---")
     
-    selected_module = st.radio(
-        "Módulos", 
-        options=[t("module_exec", lang), t("module_eng", lang), t("module_risk", lang), t("module_change", lang)], 
-        label_visibility="collapsed"
+    selected_module = option_menu(
+        menu_title=None,
+        options=["Visão Executiva", "Engenharia", "Análise de Risco", "Mudanças"],
+        icons=["speedometer2", "cpu", "shield-lock", "arrow-repeat"],
+        default_index=0,
+        styles={
+            "container": {"background-color": "transparent", "padding": "0"},
+            "nav-link": {"font-size": "14px", "color": "#d1d5db", "margin":"5px 0"},
+            "nav-link-selected": {"background-color": "#3b82f6", "color": "white"},
+        }
     )
     
     st.markdown("---")
@@ -184,8 +193,8 @@ with st.sidebar:
             load_profile_from_key(key)
 
     st.markdown("---")
-    manual_query = st.text_input(t("search_compound", lang), placeholder="CAS ou Nome")
-    if st.button(t("load_compound", lang), width="stretch") and manual_query.strip():
+    manual_query = st.text_input("Buscar CAS ou Nome")
+    if st.button("Carregar Composto", width="stretch") and manual_query.strip():
         st.session_state.profile = build_compound_profile(manual_query.strip())
 
 if st.session_state.profile is None:
@@ -213,12 +222,18 @@ action_df_dash = build_consolidated_action_plan(
 # ==============================================================================
 # MÓDULO 1: VISÃO EXECUTIVA
 # ==============================================================================
-if selected_module == t("module_exec", lang):
-    tabs = st.tabs([t("tab_dash", lang), t("tab_action", lang), "Relatório Executivo", "Casos Salvos"])
-    dash_tab, action_plan_tab, report_tab, cases_tab = tabs
+if selected_module == "Visão Executiva":
+    
+    # SUBMENU HORIZONTAL PREMIUM
+    exec_tab = option_menu(
+        menu_title=None,
+        options=["Dashboard Global", "Action Plan", "Relatório Automático", "Meus Projetos"],
+        icons=["bar-chart", "list-check", "file-earmark-pdf", "folder2-open"],
+        default_index=0, orientation="horizontal", styles=MENU_STYLES
+    )
 
-    with dash_tab:
-        st.markdown("<div class='panel'><h3>Dashboard Global (CRI)</h3></div>", unsafe_allow_html=True)
+    if exec_tab == "Dashboard Global":
+        st.markdown("<div class='panel'><h3>KPIs Principais (CRI)</h3></div>", unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns(4)
         c1.markdown(metric_card("Índice Global", f"{cri_data['index']}%", cri_data['color_class']), unsafe_allow_html=True)
         c2.markdown(metric_card("Status Atual", cri_data['band'], cri_data['color_class']), unsafe_allow_html=True)
@@ -228,18 +243,17 @@ if selected_module == t("module_exec", lang):
         left, right = st.columns(2)
         with left:
             st.markdown("<div class='panel'><h3>Matriz de Maturidade</h3></div>", unsafe_allow_html=True)
-            # UTILIZANDO OS GRÁFICOS PLOTLY NATIVOS DO NOVO CÓDIGO
-            st.plotly_chart(render_modern_gauge(cri_data['index'], cri_data['band']), use_container_width=True, config={'displayModeBar': False})
+            st.plotly_chart(render_modern_gauge(cri_data['index'], cri_data['band']), use_container_width=True, theme=None, config={'displayModeBar': False})
         with right:
             st.markdown("<div class='panel'><h3>Distribuição por Pilares</h3></div>", unsafe_allow_html=True)
-            st.plotly_chart(render_modern_radar(cri_data), use_container_width=True, config={'displayModeBar': False})
+            st.plotly_chart(render_modern_radar(cri_data), use_container_width=True, theme=None, config={'displayModeBar': False})
 
-    with action_plan_tab:
+    elif exec_tab == "Action Plan":
         st.markdown("<div class='panel'><h3>Hub de Ações Consolidadas (Action Plan)</h3></div>", unsafe_allow_html=True)
         st.dataframe(action_df_dash, use_container_width=True, hide_index=True)
 
-    with report_tab:
-        st.markdown("<div class='panel'><h3>Relatório Executivo Automático</h3></div>", unsafe_allow_html=True)
+    elif exec_tab == "Relatório Automático":
+        st.markdown("<div class='panel'><h3>Gerador de Relatório Executivo</h3></div>", unsafe_allow_html=True)
         report_case_name = st.text_input("Nome do Relatório", value=st.session_state.current_case_name or profile.identity.get("name", "Caso"))
         if st.button("Gerar Relatório Completo", type="primary"):
             st.session_state.report_bundle = build_executive_bundle(
@@ -250,7 +264,7 @@ if selected_module == t("module_exec", lang):
         if st.session_state.get("report_bundle"):
             st.download_button("📥 Baixar Documento (HTML)", st.session_state.report_bundle["html"], file_name=f"{report_case_name}.html")
 
-    with cases_tab:
+    elif exec_tab == "Meus Projetos":
         st.markdown("<div class='panel'><h3>Gestão de Projetos</h3></div>", unsafe_allow_html=True)
         col_save, col_load = st.columns(2)
         with col_save:
@@ -270,11 +284,15 @@ if selected_module == t("module_exec", lang):
 # ==============================================================================
 # MÓDULO 2: ENGENHARIA DE DADOS
 # ==============================================================================
-elif selected_module == t("module_eng", lang):
-    tabs = st.tabs(["Físico-Química", "🔥 Cinética / Runaway", "🧮 Dimensionamento PSV", "📚 Misturas & Histórico"])
-    prop_tab, run_tab, psv_tab, hist_tab = tabs
+elif selected_module == "Engenharia":
+    eng_tab = option_menu(
+        menu_title=None,
+        options=["Termodinâmica", "Cinética Térmica", "Sizing API 520", "Banco de Casos"],
+        icons=["thermometer", "fire", "speedometer2", "archive"],
+        default_index=0, orientation="horizontal", styles=MENU_STYLES
+    )
     
-    with prop_tab:
+    if eng_tab == "Termodinâmica":
         dispersion_mode = classify_dispersion_mode(profile)
         c1, c2, c3, c4 = st.columns(4)
         c1.markdown(metric_card("Ativo Base", profile.identity.get("name", "—")), unsafe_allow_html=True)
@@ -284,14 +302,14 @@ elif selected_module == t("module_eng", lang):
             
         left, right = st.columns(2)
         with left:
-            st.markdown("<div class='panel'><h3>Identidade e Perigos</h3></div>", unsafe_allow_html=True)
+            st.markdown("<div class='panel'><h3>Identidade e Perigos GHS</h3></div>", unsafe_allow_html=True)
             st.dataframe(format_identity_df(profile), use_container_width=True, hide_index=True)
             for hz in profile.hazards: st.error(hz)
         with right:
-            st.markdown("<div class='panel'><h3>Termodinâmica Básica</h3></div>", unsafe_allow_html=True)
+            st.markdown("<div class='panel'><h3>Propriedades Base</h3></div>", unsafe_allow_html=True)
             st.dataframe(format_physchem_df(profile), use_container_width=True, hide_index=True)
 
-    with run_tab:
+    elif eng_tab == "Cinética Térmica":
         st.markdown("<div class='panel'><h3>🔥 Simulação de Runaway Térmico (Semenov)</h3></div>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -307,8 +325,8 @@ elif selected_module == t("module_eng", lang):
             st.markdown(f"### Tempo de Resposta Restante (TMR): **{tmr_res['tmr_min']:.1f} minutos**")
             st.markdown(metric_card("Ação Exigida", tmr_res['status'], f"risk-{tmr_res['color']}"), unsafe_allow_html=True)
 
-    with psv_tab:
-        st.markdown("<div class='panel'><h3>🧮 Dimensionamento API 520</h3></div>", unsafe_allow_html=True)
+    elif eng_tab == "Sizing API 520":
+        st.markdown("<div class='panel'><h3>🧮 Dimensionamento Válvula API 520</h3></div>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1: w_req = st.number_input("Vazão Requerida (kg/h)", value=10000.0)
         with c2: p_rel = st.number_input("Pressão de Setpoint (kPag)", value=500.0)
@@ -318,7 +336,7 @@ elif selected_module == t("module_eng", lang):
             psv_res = size_psv_gas(W_kg_h=w_req, T_C=t_rel, P1_kPag=p_rel, Z=1.0, MW=mw)
             st.success(f"**Orifício Padrão API:** Letra {psv_res['api_letter']} ({psv_res['api_area_mm2']} mm²)")
 
-    with hist_tab:
+    elif eng_tab == "Banco de Casos":
         st.markdown("<div class='panel'><h3>📚 Banco de Acidentes Curado</h3></div>", unsafe_allow_html=True)
         relevant_cases = get_relevant_historical_cases(profile)
         if relevant_cases:
@@ -330,18 +348,22 @@ elif selected_module == t("module_eng", lang):
 # ==============================================================================
 # MÓDULO 3: ANÁLISE DE RISCO
 # ==============================================================================
-elif selected_module == t("module_risk", lang):
-    tabs = st.tabs(["🏗️ P&ID Visual Builder", "📋 HAZOP & C&E", "🛡️ ML-LOPA & HRA", "🗺️ Layout & Zonas"])
-    pid_tab, hazop_tab, lopa_tab, cons_tab = tabs
+elif selected_module == "Análise de Risco":
+    risk_tab = option_menu(
+        menu_title=None,
+        options=["P&ID Visual Builder", "HAZOP & Automação", "ML-LOPA & Humanos", "Mapas & Zonas"],
+        icons=["diagram-3", "table", "shield-lock", "geo-alt"],
+        default_index=0, orientation="horizontal", styles=MENU_STYLES
+    )
 
-    with pid_tab:
+    if risk_tab == "P&ID Visual Builder":
         st.markdown("<div class='panel'><h3>🏗️ Construtor Visual P&ID</h3></div>", unsafe_allow_html=True)
-        t1, t2 = st.tabs(["Visual Builder", "Processamento em Lote (Excel)"])
+        t1, t2 = st.tabs(["Nó Único (Grafo)", "Lote Múltiplos Nós (CSV)"])
         
         with t1:
             col1, col2 = st.columns([1, 2])
             with col1: st.session_state.current_node_name = st.text_input("Identificação do Nó", value=st.session_state.current_node_name)
-            with col2: selected_equipment = st.multiselect("Fluxo de Equipamentos", options=list(EQUIPMENT_PARAMETERS.keys()), default=["Tanque de Armazenamento Atmosférico", "Tubulação / Linha de Transferência", "Bomba Centrífuga"])
+            with col2: selected_equipment = st.multiselect("Equipamentos e Linhas (Em Ordem)", options=list(EQUIPMENT_PARAMETERS.keys()), default=["Tanque de Armazenamento Atmosférico", "Tubulação / Linha de Transferência", "Bomba Centrífuga"])
                 
             if selected_equipment:
                 dot = graphviz.Digraph()
@@ -353,28 +375,29 @@ elif selected_module == t("module_risk", lang):
                     if i > 0: dot.edge(str(i-1), str(i))
                 st.graphviz_chart(dot, use_container_width=True)
 
-            if st.button("🚀 Processar Grafo e Criar HAZOP", type="primary"):
+            if st.button("🚀 Consolidar Topologia em HAZOP", type="primary"):
                 st.session_state.pid_hazop_matrix = generate_hazop_from_topology(st.session_state.current_node_name, selected_equipment, profile)
-                st.success("Análise de Perigos concluída!")
+                st.success("Grafo processado! Avance para a aba HAZOP & Automação.")
                 
         with t2:
-            st.markdown("<div class='note-card'>Importe a Equipment List (Nó, Equipamento).</div>", unsafe_allow_html=True)
+            st.markdown("<div class='note-card'>Importe a Equipment List extraída do seu CAD (Nó, Equipamento).</div>", unsafe_allow_html=True)
             uploaded_file = st.file_uploader("Upload CSV/XLSX", type=["csv", "xlsx"])
             if uploaded_file is not None:
                 df_bulk = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-                if st.button("⚡ Executar Bulk Process", type="primary"):
+                if st.button("⚡ Executar Processamento em Lote", type="primary"):
                     bulk_results = process_bulk_pid_nodes(df_bulk, profile)
                     if bulk_results:
                         st.session_state.pid_hazop_matrix = bulk_results
-                        st.success(f"{len(bulk_results)} cenários gerados.")
+                        st.success(f"{len(bulk_results)} cenários gerados para a fábrica inteira.")
 
-    with hazop_tab:
-        st.markdown("<div class='panel'><h3>Matrizes de Risco e Automação</h3></div>", unsafe_allow_html=True)
+    elif risk_tab == "HAZOP & Automação":
+        st.markdown("<div class='panel'><h3>Matrizes de Engenharia Geradas</h3></div>", unsafe_allow_html=True)
         if st.session_state.get("pid_hazop_matrix"):
             df_hazop = pd.DataFrame(st.session_state.pid_hazop_matrix)
             
-            with st.expander("📋 Estudo HAZOP Completo (IEC 61882)", expanded=True):
-                view_mode = st.radio("Modo de Exibição:", ["🗂️ Visão em Cards (Reunião)", "📊 Visão em Tabela (Dados)"], horizontal=True, label_visibility="collapsed")
+            with st.expander("📋 Estudo HAZOP (IEC 61882)", expanded=True):
+                # O ALTERNADOR DE VISUALIZAÇÃO ENTRE CARDS E TABELA
+                view_mode = st.radio("Modo de Leitura:", ["🗂️ Cards (Discussão de Reunião)", "📊 Tabela Otimizada (Text Wrap)"], horizontal=True, label_visibility="collapsed")
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 if "Cards" in view_mode:
@@ -404,97 +427,111 @@ elif selected_module == t("module_risk", lang):
                             "Salvaguarda Atual": st.column_config.TextColumn("Salvaguarda", width="medium"),
                         }
                     )
-                st.download_button("📥 Baixar HAZOP (CSV)", df_hazop.to_csv(index=False).encode('utf-8'), "hazop_export.csv", "text/csv")
+                st.download_button("📥 Exportar CSV", df_hazop.to_csv(index=False).encode('utf-8'), "hazop_export.csv", "text/csv")
             
-            with st.expander("🔀 Matriz Causa e Efeito (IEC 61511)", expanded=False):
+            with st.expander("🔀 Matriz Causa e Efeito p/ Automação (IEC 61511)", expanded=False):
                 df_ce = generate_ce_matrix_from_hazop(st.session_state.pid_hazop_matrix)
                 if not df_ce.empty: 
                     st.dataframe(df_ce, use_container_width=True, hide_index=True)
-                    st.download_button("📥 Baixar C&E", df_ce.to_csv(index=False).encode('utf-8'), "ce_matrix.csv", "text/csv")
+                    st.download_button("📥 Exportar C&E", df_ce.to_csv(index=False).encode('utf-8'), "ce_matrix.csv", "text/csv")
                 else: 
-                    st.info("Nenhuma arquitetura de Trip detectada.")
+                    st.info("Nenhuma arquitetura de Trip (Intertravamento) foi deduzida dos cenários atuais.")
         else:
-            st.warning("Construa a topologia primeiro.")
+            st.warning("Gere os cenários no P&ID Builder primeiro.")
 
-    with lopa_tab:
-        st.markdown("<div class='panel'><h3>🛡️ LOPA com PFD Dinâmico (OREDA)</h3></div>", unsafe_allow_html=True)
+    elif risk_tab == "ML-LOPA & Humanos":
+        st.markdown("<div class='panel'><h3>🛡️ Confiabilidade Dinâmica e Erro Humano</h3></div>", unsafe_allow_html=True)
         c_ml, c_hra, c_lopa = st.columns([1, 1, 1.2])
         
         with c_ml:
             st.markdown("#### 🤖 ML/OREDA Wear-Out")
-            eq_type = st.selectbox("Equipamento Analisado", ["Bomba de Resfriamento", "Válvula de Bloqueio (SDV)"])
-            t_meses = st.slider("Meses em Serviço", 1, 60, 24)
-            anomaly = st.slider("Alarme Preditivo (ML)", 0.0, 1.0, 0.2)
+            eq_type = st.selectbox("Equipamento", ["Bomba de Resfriamento", "Válvula de Bloqueio"])
+            t_meses = st.slider("Meses de Uso", 1, 60, 24)
+            anomaly = st.slider("Anomalia Preditiva", 0.0, 1.0, 0.2)
             dyn_res = calculate_dynamic_pfd(1e-2 if "Bomba" in eq_type else 1e-3, t_meses, anomaly, eq_type)
-            st.metric("PFD Ajustado", dyn_res["pfd_str"], f"+{dyn_res['risk_increase_pct']:.0f}% Risco", delta_color="inverse")
+            st.metric("PFD Ajustado", dyn_res["pfd_str"], f"+{dyn_res['risk_increase_pct']:.0f}% Degradação", delta_color="inverse")
             
         with c_hra:
-            st.markdown("#### 🧠 HRA Operador")
-            t_av = st.selectbox("Tempo P/ Agir", ["Menos de 5 minutos", "5 a 10 minutos"])
-            stress = st.selectbox("Estresse", ["Extremo (Emergência Crítica)", "Nominal"])
-            if st.button("Obter Erro Humano (HEP)"):
+            st.markdown("#### 🧠 HRA (THERP NUREG)")
+            t_av = st.selectbox("Tempo de Resposta", ["Menos de 5 minutos", "5 a 10 minutos"])
+            stress = st.selectbox("Carga de Estresse", ["Extremo (Emergência)", "Nominal"])
+            if st.button("Estimar Erro (HEP)"):
                 hra_res = calculate_human_error_probability(t_av, stress, "Alta (Múltiplas válvulas/painéis)")
                 st.success(f"**HEP:** {hra_res['pfd_equivalent']}")
                 
         with c_lopa:
-            st.markdown("#### 📊 LOPA Global")
-            f_ie = st.number_input("Freq. Evento Iniciador (1/ano)", value=0.1, format="%.3f")
+            st.markdown("#### 📊 LOPA Integrado")
+            f_ie = st.number_input("Freq. Inicial (1/ano)", value=0.1, format="%.3f")
             opcoes_ipl = [f"{n} (PFD={p})" for n, p in IPL_CATALOG]
             opcoes_ipl.append(f"{eq_type} Degradada (PFD={dyn_res['dynamic_pfd']:.1e})")
-            selected_ipls = st.multiselect("IPLs Instaladas", opcoes_ipl)
-            if st.button("Simular SIL Global", type="primary"):
+            selected_ipls = st.multiselect("Adicionar Camadas (IPLs)", opcoes_ipl)
+            if st.button("Computar Risco Mitigado", type="primary"):
                 chosen_pfds = [("Barreira", float(lbl.split("PFD=")[1].replace(")", ""))) for lbl in selected_ipls if "PFD=" in lbl]
                 st.session_state.lopa_result = compute_lopa(f_ie, 1e-4, chosen_pfds)
-                st.info(f"Freq. Mitigada (MCF): **{st.session_state.lopa_result['mcf']:.2e}/ano**")
+                st.info(f"Freq. Residual (MCF): **{st.session_state.lopa_result['mcf']:.2e}/ano**")
 
-    with cons_tab:
-        st.markdown("<div class='panel'><h3>🗺️ Mapas de Dispersão e Facility Siting</h3></div>", unsafe_allow_html=True)
+    elif risk_tab == "Mapas & Zonas":
+        st.markdown("<div class='panel'><h3>🗺️ Facility Siting e Zonas de Impacto</h3></div>", unsafe_allow_html=True)
         
-        with st.expander("🔥 API 521: Radiação Térmica Externa", expanded=True):
+        with st.expander("🔥 API 521: Avaliação de Efeito Dominó Térmico", expanded=True):
             d1, d2, d3 = st.columns(3)
             with d1: dist = st.number_input("Distância ao Alvo Crítico (m)", value=15.0)
-            with d2: m_rate = st.number_input("Vazão de Liberação (kg/s)", value=10.0)
+            with d2: m_rate = st.number_input("Vazão do Inventário (kg/s)", value=10.0)
             with d3: hc = st.number_input("Calor de Combustão (MJ/kg)", value=44.0)
-            if st.button("Calcular Radiação"):
+            if st.button("Computar Falha Induzida"):
                 domino = calculate_domino_effect(dist, m_rate, hc * 1e6)
-                st.error(f"**{domino['status']}** | {domino['q_kW_m2']:.2f} kW/m²")
+                st.error(f"**{domino['status']}** | Carga Térmica: {domino['q_kW_m2']:.2f} kW/m²")
         
-        with st.expander("🌍 Integração GIS de Dispersão", expanded=False):
-            c1, c2 = st.columns(2)
-            with c1: lat = st.number_input("Latitude", value=-22.8188, format="%.6f")
-            with c2: lon = st.number_input("Longitude", value=-47.0635, format="%.6f")
-            render_map_in_streamlit(lat=lat, lon=lon, dispersion_data=st.session_state.get("dispersion_result"), thermal_data=st.session_state.get("pool_fire_result"))
+        with st.expander("🏭 Projeção 2D na Planta Baixa (Plotly)", expanded=False):
+            layout_file = st.file_uploader("Upload da Planta (PNG/JPG)", type=["png", "jpg", "jpeg"])
+            lc1, lc2, lc3 = st.columns(3)
+            with lc1: scale_m = st.number_input("Escala: Metros por Pixel?", value=0.1, format="%.3f")
+            with lc2: ox = st.number_input("Origem (Pixel X)", value=500)
+            with lc3: oy = st.number_input("Origem (Pixel Y)", value=500)
+            
+            if layout_file and st.button("Gerar Heatmap na Planta", type="primary"):
+                zonas_exemplo = [
+                    {"radius_m": 15.0, "color": "darkred", "label": "Letal / Ruptura"},
+                    {"radius_m": 30.0, "color": "orange", "label": "Perda de Controle"},
+                    {"radius_m": 60.0, "color": "yellow", "label": "Zona de Restrição"}
+                ]
+                fig_layout = build_plant_layout_heatmap(layout_file, scale_m, int(ox), int(oy), zonas_exemplo)
+                st.plotly_chart(fig_layout, use_container_width=True, theme=None)
 
 # ==============================================================================
 # MÓDULO 4: GESTÃO DE MUDANÇA
 # ==============================================================================
-elif selected_module == t("module_change", lang):
-    tabs = st.tabs(["🔄 MOC (Gestão de Mudanças)", "✅ PSSR (Pré-Startup)"])
-    moc_tab, pssr_tab = tabs
+elif selected_module == "Mudanças":
+    chg_tab = option_menu(
+        menu_title=None,
+        options=["MOC (Modificação)", "PSSR (Inspeção Pré-Partida)"],
+        icons=["arrow-repeat", "check2-square"],
+        default_index=0, orientation="horizontal", styles=MENU_STYLES
+    )
 
-    with moc_tab:
-        st.markdown("<div class='panel'><h3>🔄 Avaliação de MOC</h3></div>", unsafe_allow_html=True)
+    if chg_tab == "MOC (Modificação)":
+        st.markdown("<div class='panel'><h3>🔄 Avaliação de Gestão de Mudança</h3></div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            change_type = st.selectbox("Tipo da Mudança", ["Mudança química", "Mudança de equipamento", "Mudança de procedimento"])
-            impacts = st.multiselect("Áreas de Impacto", ["Química / composição", "Pressão", "Temperatura", "Alívio / PSV"])
+            change_type = st.selectbox("Escopo da Mudança", ["Mudança química", "Mudança de equipamento", "Mudança de procedimento"])
+            impacts = st.multiselect("Áreas Críticas Afetadas", ["Química / composição", "Pressão", "Temperatura", "Alívio / PSV"])
         with c2:
-            st.write("Fatores Agravantes:")
-            p1 = st.checkbox("Mudança em caráter temporário")
-            p2 = st.checkbox("Afeta SIS/PSV")
-        if st.button("Submeter MOC", type="primary"):
+            st.write("Fatores Restritivos:")
+            p1 = st.checkbox("Mudança de Caráter Temporário")
+            p2 = st.checkbox("Bypass ou Override em Sistema de Segurança")
+        if st.button("Protocolar MOC para Análise", type="primary"):
             st.session_state.moc_result = evaluate_moc(profile, change_type, impacts, "", temporary=p1, protections_changed=p2, bypass_or_override=False)
-            st.success("MOC Avaliado.")
+            st.success("MOC Submetido e Classificado.")
 
-    with pssr_tab:
-        st.markdown("<div class='panel'><h3>✅ Check de Partida Segura (PSSR)</h3></div>", unsafe_allow_html=True)
+    elif chg_tab == "PSSR (Inspeção Pré-Partida)":
+        st.markdown("<div class='panel'><h3>✅ Checklist de Partida Segura</h3></div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            d1 = st.checkbox("Inspeção de campo aprovada")
-            d2 = st.checkbox("Procedimentos atualizados")
+            d1 = st.checkbox("Construção validada conforme diagrama P&ID")
+            d2 = st.checkbox("Procedimentos de emergência revisados e na sala de controle")
         with c2:
-            d4 = st.checkbox("Rotas de alívio verificadas")
-            d5 = st.checkbox("Testes de intertravamentos concluídos")
-        if st.button("Verificar PSSR", type="primary"):
+            d4 = st.checkbox("Malhas do SIS e PSVs inspecionadas e destravadas")
+            d5 = st.checkbox("Matriz de Causa e Efeito validada em TAF (Teste de Aceitação)")
+        if st.button("Rodar Assinatura PSSR", type="primary"):
             st.session_state.pssr_result = evaluate_pssr(design_ok=d1, procedures_ok=d2, training_ok=True, relief_verified=d4, alarms_tested=d5, startup_authorized=True, pha_or_moc_ok=True, mi_ready=True, emergency_ready=True, scope_label="PSSR")
-            st.success("Checklist computado.")
+            st.success("Status Operacional Emitido.")
