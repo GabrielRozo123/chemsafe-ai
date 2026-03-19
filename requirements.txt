@@ -13,3 +13,4 @@ beautifulsoup4>=4.12
 folium>=0.15.0
 streamlit-folium>=0.18.0
 graphviz==0.20.1
+plotly
