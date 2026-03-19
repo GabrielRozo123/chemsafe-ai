@@ -79,8 +79,20 @@ st.markdown(APP_CSS, unsafe_allow_html=True)
 # FUNÇÕES DE BLINDAGEM E PLOTLY
 # ==============================================================================
 def is_valid_df(df):
-    """Garante que a variável é um DataFrame do Pandas e não está vazia. Evita erros de Truth Value."""
+    """Garante que a variável é um DataFrame do Pandas e não está vazia."""
     return isinstance(df, pd.DataFrame) and not df.empty
+
+def get_action_col(df):
+    """Descobre dinamicamente a coluna de ação para evitar KeyError."""
+    possible_names = ["Ação Recomendada", "Ação", "Recomendação", "Ações", "Descrição", "Ação Requerida"]
+    for name in possible_names:
+        if name in df.columns:
+            return name
+    # Fallback: pega a primeira coluna que parece texto livre
+    for col in df.columns:
+        if col not in ["Origem", "Criticidade", "Status", "Responsável", "Prazo"]:
+            return col
+    return df.columns[-1]
 
 def render_modern_gauge(score, band):
     color = "#10b981" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
@@ -221,13 +233,16 @@ action_df_dash = build_consolidated_action_plan(
     profile, psi_df_dash, st.session_state.get("moc_result"), st.session_state.get("pssr_result"), st.session_state.get("reactivity_result")
 )
 
-# BLINDAGEM DE DADOS (Evita o ValueError de DataFrame)
+# BLINDAGEM DE DADOS E OBTENÇÃO DINÂMICA
 has_actions = is_valid_df(action_df_dash)
 num_acoes_pendentes = len(action_df_dash) if has_actions else 0
-gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])]) if has_actions else 0
+
+gaps_criticos = 0
+if has_actions and "Criticidade" in action_df_dash.columns:
+    gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])])
 
 # ==============================================================================
-# MÓDULO 1: VISÃO EXECUTIVA
+# MÓDULO 1: VISÃO EXECUTIVA 
 # ==============================================================================
 if selected_module == "Visão Executiva":
     exec_tab = option_menu(
@@ -257,6 +272,9 @@ if selected_module == "Visão Executiva":
         st.markdown("<div class='note-card'><b>Governança de Risco:</b> Acompanhe, delegue e feche as recomendações. O sistema mapeia requisitos de MOC e a Hierarquia de Controles NIOSH.</div>", unsafe_allow_html=True)
         
         if has_actions:
+            # Descobre a coluna de ação dinamicamente
+            col_acao = get_action_col(action_df_dash)
+
             # INJEÇÃO DAS COLUNAS DE AUDITORIA OSHA/CCPS
             if "Status" not in action_df_dash.columns: action_df_dash["Status"] = "Aberto"
             if "Responsável" not in action_df_dash.columns: action_df_dash["Responsável"] = "Engenharia"
@@ -270,26 +288,30 @@ if selected_module == "Visão Executiva":
                 return "Mitigação (Emergência)"
                 
             if "Hierarquia NIOSH" not in action_df_dash.columns:
-                action_df_dash["Hierarquia NIOSH"] = action_df_dash["Ação Recomendada"].apply(classify_hierarchy)
+                action_df_dash["Hierarquia NIOSH"] = action_df_dash[col_acao].apply(classify_hierarchy)
 
             if "Recurso" not in action_df_dash.columns:
                 action_df_dash["Recurso"] = action_df_dash["Hierarquia NIOSH"].apply(lambda x: "CAPEX" if "Engenharia" in x else "OPEX")
 
-            # Data Editor Interativo
+            # Configuração dinâmica das colunas do Editor
+            col_config = {
+                "Status": st.column_config.SelectboxColumn("Status", options=["Aberto", "Em Andamento", "Aguardando Verba", "Fechado"], required=True),
+                "Responsável": st.column_config.SelectboxColumn("Responsável", options=["Engenharia", "Manutenção", "Operação", "HSE"]),
+                "Prazo (Dias)": st.column_config.NumberColumn("Prazo (Dias)", min_value=1, max_value=365, step=1),
+                "Requer MOC?": st.column_config.CheckboxColumn("Requer MOC?", default=False),
+                "Recurso": st.column_config.TextColumn("Recurso", disabled=True),
+                col_acao: st.column_config.TextColumn("Ação Recomendada", disabled=True, width="large"),
+                "Hierarquia NIOSH": st.column_config.TextColumn("Hierarquia (Auto)", disabled=True)
+            }
+            if "Criticidade" in action_df_dash.columns:
+                col_config["Criticidade"] = st.column_config.TextColumn("Criticidade", disabled=True)
+
+            # Data Editor Interativo (Usando width='stretch' conforme novo padrão)
             edited_df = st.data_editor(
                 action_df_dash,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
-                column_config={
-                    "Status": st.column_config.SelectboxColumn("Status", options=["Aberto", "Em Andamento", "Aguardando Verba", "Fechado"], required=True),
-                    "Responsável": st.column_config.SelectboxColumn("Responsável", options=["Engenharia", "Manutenção", "Operação", "HSE"]),
-                    "Prazo (Dias)": st.column_config.NumberColumn("Prazo (Dias)", min_value=1, max_value=365, step=1),
-                    "Requer MOC?": st.column_config.CheckboxColumn("Requer MOC?", default=False),
-                    "Recurso": st.column_config.TextColumn("Recurso", disabled=True),
-                    "Criticidade": st.column_config.TextColumn("Criticidade", disabled=True),
-                    "Ação Recomendada": st.column_config.TextColumn("Ação Recomendada", disabled=True, width="large"),
-                    "Hierarquia NIOSH": st.column_config.TextColumn("Hierarquia (Auto)", disabled=True)
-                }
+                column_config=col_config
             )
             
             fechadas = len(edited_df[edited_df["Status"] == "Fechado"])
@@ -352,11 +374,11 @@ elif selected_module == "Engenharia":
         left, right = st.columns(2)
         with left:
             st.markdown("<div class='panel'><h3>Identidade e Perigos GHS</h3></div>", unsafe_allow_html=True)
-            st.dataframe(format_identity_df(profile), use_container_width=True, hide_index=True)
+            st.dataframe(format_identity_df(profile), width="stretch", hide_index=True)
             for hz in profile.hazards: st.error(hz)
         with right:
             st.markdown("<div class='panel'><h3>Propriedades Base</h3></div>", unsafe_allow_html=True)
-            st.dataframe(format_physchem_df(profile), use_container_width=True, hide_index=True)
+            st.dataframe(format_physchem_df(profile), width="stretch", hide_index=True)
 
     elif eng_tab == "Cinética Térmica":
         st.markdown("<div class='panel'><h3>🔥 Simulação de Runaway Térmico (Semenov)</h3></div>", unsafe_allow_html=True)
@@ -467,7 +489,7 @@ elif selected_module == "Análise de Risco":
                         """, unsafe_allow_html=True)
                 else:
                     st.dataframe(
-                        df_hazop, use_container_width=True, hide_index=True,
+                        df_hazop, width="stretch", hide_index=True,
                         column_config={
                             "Nó": st.column_config.TextColumn("Nó", width="medium"),
                             "Causa": st.column_config.TextColumn("Causa", width="large"),
@@ -480,7 +502,7 @@ elif selected_module == "Análise de Risco":
             with st.expander("🔀 Matriz Causa e Efeito p/ Automação (IEC 61511)", expanded=False):
                 df_ce = generate_ce_matrix_from_hazop(st.session_state.pid_hazop_matrix)
                 if is_valid_df(df_ce):
-                    st.dataframe(df_ce, use_container_width=True, hide_index=True)
+                    st.dataframe(df_ce, width="stretch", hide_index=True)
                     st.download_button("📥 Exportar C&E", df_ce.to_csv(index=False).encode('utf-8'), "ce_matrix.csv", "text/csv")
                 else: 
                     st.info("Nenhuma arquitetura de Trip (Intertravamento) foi deduzida dos cenários atuais.")
