@@ -180,10 +180,12 @@ if selected_module == t("module_exec", lang):
         left, right = st.columns(2)
         with left:
             st.markdown("<div class='panel'><h3>Matriz de Maturidade</h3></div>", unsafe_allow_html=True)
-            st.plotly_chart(build_executive_gauge(cri_data['index'], cri_data['band']), use_container_width=True)
+            # FIX: theme=None garante que o Plotly respeite o fundo escuro que montamos
+            st.plotly_chart(build_executive_gauge(cri_data['index'], cri_data['band']), use_container_width=True, theme=None)
         with right:
             st.markdown("<div class='panel'><h3>Distribuição por Pilares</h3></div>", unsafe_allow_html=True)
-            st.plotly_chart(build_radar_chart(), use_container_width=True)
+            # FIX: theme=None
+            st.plotly_chart(build_radar_chart(), use_container_width=True, theme=None)
 
     with action_plan_tab:
         st.markdown("<div class='panel'><h3>Hub de Ações Consolidadas (Action Plan)</h3></div>", unsafe_allow_html=True)
@@ -268,6 +270,7 @@ elif selected_module == t("module_eng", lang):
             mw = float(profile.identity.get("molecular_weight", 28.0) or 28.0)
             psv_res = size_psv_gas(W_kg_h=w_req, T_C=t_rel, P1_kPag=p_rel, Z=1.0, MW=mw)
             st.success(f"**Orifício Padrão API:** Letra {psv_res['api_letter']} ({psv_res['api_area_mm2']} mm²)")
+            st.write(f"Área Mínima Calculada Exata: {psv_res['calculated_area_mm2']:.2f} mm²")
 
     with hist_tab:
         st.markdown("<div class='panel'><h3>📚 Banco de Acidentes Curado</h3></div>", unsafe_allow_html=True)
@@ -322,12 +325,50 @@ elif selected_module == t("module_risk", lang):
     with hazop_tab:
         st.markdown("<div class='panel'><h3>Matrizes de Risco e Automação</h3></div>", unsafe_allow_html=True)
         if st.session_state.get("pid_hazop_matrix"):
-            with st.expander("📋 Estudo HAZOP Completo", expanded=True):
-                st.dataframe(pd.DataFrame(st.session_state.pid_hazop_matrix), use_container_width=True, hide_index=True)
+            df_hazop = pd.DataFrame(st.session_state.pid_hazop_matrix)
+            
+            with st.expander("📋 Estudo HAZOP Completo (IEC 61882)", expanded=True):
+                # O Alternador de Visualização (Visual Switcher)
+                view_mode = st.radio("Modo de Exibição:", ["🗂️ Visão em Cards (Reunião)", "📊 Visão em Tabela (Dados)"], horizontal=True, label_visibility="collapsed")
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                if "Cards" in view_mode:
+                    for index, row in df_hazop.iterrows():
+                        st.markdown(f"""
+                        <div style="background-color: rgba(30, 41, 59, 0.4); border: 1px solid #374151; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="color: #9ca3af; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;">{row['Nó']}</span>
+                                <span style="background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">{row['Palavra-Guia']} {row['Parâmetro']}</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
+                                <div><strong style="color: #f87171; font-size: 0.9rem;">⚠️ Causa:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Causa']}</span></div>
+                                <div><strong style="color: #f87171; font-size: 0.9rem;">💥 Consequência:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Consequência']}</span></div>
+                            </div>
+                            <div style="background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 10px; border-radius: 6px;">
+                                <strong style="color: #34d399; font-size: 0.9rem;">🛡️ Salvaguardas:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Salvaguarda Atual']}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.dataframe(
+                        df_hazop, 
+                        use_container_width=True, hide_index=True,
+                        column_config={
+                            "Nó": st.column_config.TextColumn("Nó", width="medium"),
+                            "Causa": st.column_config.TextColumn("Causa", width="large"),
+                            "Consequência": st.column_config.TextColumn("Consequência", width="large"),
+                            "Salvaguarda Atual": st.column_config.TextColumn("Salvaguarda", width="medium"),
+                        }
+                    )
+                st.download_button("📥 Baixar HAZOP (CSV)", df_hazop.to_csv(index=False).encode('utf-8'), "hazop_export.csv", "text/csv")
+            
             with st.expander("🔀 Matriz Causa e Efeito (IEC 61511)", expanded=False):
                 df_ce = generate_ce_matrix_from_hazop(st.session_state.pid_hazop_matrix)
-                if not df_ce.empty: st.dataframe(df_ce, use_container_width=True, hide_index=True)
-                else: st.info("Nenhuma arquitetura de Trip detectada.")
+                if not df_ce.empty: 
+                    st.dataframe(df_ce, use_container_width=True, hide_index=True)
+                    st.download_button("📥 Baixar C&E", df_ce.to_csv(index=False).encode('utf-8'), "ce_matrix.csv", "text/csv")
+                else: 
+                    st.info("Nenhuma arquitetura de Trip detectada.")
         else:
             st.warning("Construa a topologia primeiro.")
 
@@ -375,23 +416,21 @@ elif selected_module == t("module_risk", lang):
                 st.error(f"**{domino['status']}** | {domino['q_kW_m2']:.2f} kW/m²")
         
         with st.expander("🏭 Layout da Planta (Plotly Heatmap 2D)", expanded=False):
-            st.markdown("<div class='note-card'>Carregue a planta baixa (PNG/JPG) para projetar os anéis de consequência termodinâmica sobre o layout real do cliente.</div>", unsafe_allow_html=True)
             layout_file = st.file_uploader("Upload Planta Baixa", type=["png", "jpg", "jpeg"])
-            
             lc1, lc2, lc3 = st.columns(3)
-            with lc1: scale_m = st.number_input("Escala: Quantos Metros tem 1 Pixel?", value=0.1, format="%.3f")
+            with lc1: scale_m = st.number_input("Escala: Metros por Pixel?", value=0.1, format="%.3f")
             with lc2: ox = st.number_input("Origem do Fogo (Pixel X)", value=500)
             with lc3: oy = st.number_input("Origem do Fogo (Pixel Y)", value=500)
             
             if layout_file and st.button("Projetar Anéis no Layout", type="primary"):
-                # Simulação baseada no Dominó e API 521
                 zonas_exemplo = [
                     {"radius_m": 15.0, "color": "darkred", "label": "Zona Letal (Ruptura)"},
                     {"radius_m": 30.0, "color": "orange", "label": "Perda de Controle"},
                     {"radius_m": 60.0, "color": "yellow", "label": "Limite de Dor"}
                 ]
                 fig_layout = build_plant_layout_heatmap(layout_file, scale_m, int(ox), int(oy), zonas_exemplo)
-                st.plotly_chart(fig_layout, use_container_width=True)
+                # FIX: theme=None para respeitar as configurações transparentes do mapa
+                st.plotly_chart(fig_layout, use_container_width=True, theme=None)
 
 # ==============================================================================
 # MÓDULO 4: GESTÃO DE MUDANÇA
