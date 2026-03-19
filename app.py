@@ -76,8 +76,12 @@ st.set_page_config(page_title="ChemSafe Pro Enterprise", page_icon="⚗️", lay
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# FUNÇÕES PLOTLY EMBUTIDAS
+# FUNÇÕES DE BLINDAGEM E PLOTLY
 # ==============================================================================
+def is_valid_df(df):
+    """Garante que a variável é um DataFrame do Pandas e não está vazia. Evita erros de Truth Value."""
+    return isinstance(df, pd.DataFrame) and not df.empty
+
 def render_modern_gauge(score, band):
     color = "#10b981" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
     fig = go.Figure(go.Indicator(
@@ -199,7 +203,6 @@ if st.session_state.profile is None:
     load_profile_from_key(st.session_state.selected_compound_key)
 profile = st.session_state.profile
 
-# BREADCRUMB DE CONTEXTO
 st.markdown(f"""
 <div class="context-header">
     <div>🧪 Ativo Analisado: <span>{profile.identity.get('name', 'N/A')} (CAS: {profile.identity.get('cas', 'N/A')})</span></div>
@@ -207,7 +210,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Dashboards Globais e Blindagem de Dados
+# Geração dos Dados Globais
 psi_df_dash = build_psi_readiness_df(profile, st.session_state.get("lopa_result"), bowtie_payload())
 cri_data = calculate_case_readiness_index(
     profile, summarize_psi_readiness(psi_df_dash),
@@ -218,13 +221,13 @@ action_df_dash = build_consolidated_action_plan(
     profile, psi_df_dash, st.session_state.get("moc_result"), st.session_state.get("pssr_result"), st.session_state.get("reactivity_result")
 )
 
-# BLINDAGEM CONTRA O ERRO DE DATAFRAME
-has_actions = isinstance(action_df_dash, pd.DataFrame) and not action_df_dash.empty
+# BLINDAGEM DE DADOS (Evita o ValueError de DataFrame)
+has_actions = is_valid_df(action_df_dash)
 num_acoes_pendentes = len(action_df_dash) if has_actions else 0
 gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])]) if has_actions else 0
 
 # ==============================================================================
-# MÓDULO 1: VISÃO EXECUTIVA 
+# MÓDULO 1: VISÃO EXECUTIVA
 # ==============================================================================
 if selected_module == "Visão Executiva":
     exec_tab = option_menu(
@@ -250,26 +253,29 @@ if selected_module == "Visão Executiva":
             st.plotly_chart(render_modern_radar(cri_data), use_container_width=True, theme=None, config={'displayModeBar': False})
 
     elif exec_tab == "Action Plan":
-        st.markdown("<div class='panel'><h3>Hub de Ações Interativo (OSHA 1910.119 e CCPS)</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'><b>Governança de Risco:</b> Acompanhe, delegue e feche as recomendações extraídas de HAZOP, LOPA e MOC garantindo a Hierarquia de Controles do NIOSH.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='panel'><h3>Hub de Ações Interativo (Em conformidade com OSHA PSM & CCPS)</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='note-card'><b>Governança de Risco:</b> Acompanhe, delegue e feche as recomendações. O sistema mapeia requisitos de MOC e a Hierarquia de Controles NIOSH.</div>", unsafe_allow_html=True)
         
         if has_actions:
-            # Prevenção e Injeção das colunas faltantes
+            # INJEÇÃO DAS COLUNAS DE AUDITORIA OSHA/CCPS
             if "Status" not in action_df_dash.columns: action_df_dash["Status"] = "Aberto"
             if "Responsável" not in action_df_dash.columns: action_df_dash["Responsável"] = "Engenharia"
-            if "Prazo" not in action_df_dash.columns: action_df_dash["Prazo"] = "30 Dias"
+            if "Prazo (Dias)" not in action_df_dash.columns: action_df_dash["Prazo (Dias)"] = 30
+            if "Requer MOC?" not in action_df_dash.columns: action_df_dash["Requer MOC?"] = False
             
-            # AI Classifier Simples para Hierarquia de Controles
             def classify_hierarchy(action_text):
                 text = str(action_text).lower()
                 if any(word in text for word in ["instalar", "válvula", "psv", "sis", "alarme", "bomba", "trocar"]): return "Engenharia (Hardware)"
-                elif any(word in text for word in ["revisar", "treinar", "procedimento", "atualizar"]): return "Administrativo"
-                return "Mitigação"
+                elif any(word in text for word in ["revisar", "treinar", "procedimento", "atualizar"]): return "Administrativo (Procedimento)"
+                return "Mitigação (Emergência)"
                 
             if "Hierarquia NIOSH" not in action_df_dash.columns:
                 action_df_dash["Hierarquia NIOSH"] = action_df_dash["Ação Recomendada"].apply(classify_hierarchy)
 
-            # Data Editor Seguro
+            if "Recurso" not in action_df_dash.columns:
+                action_df_dash["Recurso"] = action_df_dash["Hierarquia NIOSH"].apply(lambda x: "CAPEX" if "Engenharia" in x else "OPEX")
+
+            # Data Editor Interativo
             edited_df = st.data_editor(
                 action_df_dash,
                 use_container_width=True,
@@ -277,6 +283,9 @@ if selected_module == "Visão Executiva":
                 column_config={
                     "Status": st.column_config.SelectboxColumn("Status", options=["Aberto", "Em Andamento", "Aguardando Verba", "Fechado"], required=True),
                     "Responsável": st.column_config.SelectboxColumn("Responsável", options=["Engenharia", "Manutenção", "Operação", "HSE"]),
+                    "Prazo (Dias)": st.column_config.NumberColumn("Prazo (Dias)", min_value=1, max_value=365, step=1),
+                    "Requer MOC?": st.column_config.CheckboxColumn("Requer MOC?", default=False),
+                    "Recurso": st.column_config.TextColumn("Recurso", disabled=True),
                     "Criticidade": st.column_config.TextColumn("Criticidade", disabled=True),
                     "Ação Recomendada": st.column_config.TextColumn("Ação Recomendada", disabled=True, width="large"),
                     "Hierarquia NIOSH": st.column_config.TextColumn("Hierarquia (Auto)", disabled=True)
@@ -286,11 +295,11 @@ if selected_module == "Visão Executiva":
             fechadas = len(edited_df[edited_df["Status"] == "Fechado"])
             total = len(edited_df)
             progresso = fechadas / total if total > 0 else 0.0
-            st.markdown(f"**Progresso de Resolução: {fechadas}/{total}**")
+            st.markdown(f"**Progresso de Resolução: {fechadas}/{total} ações concluídas**")
             st.progress(progresso)
-            st.download_button("📥 Exportar Plano de Ação para SAP (CSV)", edited_df.to_csv(index=False).encode('utf-8'), "action_plan.csv", "text/csv")
+            st.download_button("📥 Exportar Plano (CSV) para SAP/Maximo", edited_df.to_csv(index=False).encode('utf-8'), "action_plan_compliant.csv", "text/csv")
         else:
-            st.info("Nenhuma ação de segurança pendente no momento. O design base cumpre os requisitos.")
+            st.info("Nenhuma ação de segurança pendente no momento. A planta está de acordo com as especificações.")
 
     elif exec_tab == "Relatório Automático":
         st.markdown("<div class='panel'><h3>Gerador de Relatório Executivo</h3></div>", unsafe_allow_html=True)
@@ -470,8 +479,7 @@ elif selected_module == "Análise de Risco":
             
             with st.expander("🔀 Matriz Causa e Efeito p/ Automação (IEC 61511)", expanded=False):
                 df_ce = generate_ce_matrix_from_hazop(st.session_state.pid_hazop_matrix)
-                # BLINDAGEM DO DATA FRAME DE MATRIZ C&E
-                if isinstance(df_ce, pd.DataFrame) and not df_ce.empty: 
+                if is_valid_df(df_ce):
                     st.dataframe(df_ce, use_container_width=True, hide_index=True)
                     st.download_button("📥 Exportar C&E", df_ce.to_csv(index=False).encode('utf-8'), "ce_matrix.csv", "text/csv")
                 else: 
@@ -523,7 +531,6 @@ elif selected_module == "Análise de Risco":
                 st.error(f"**{domino['status']}** | Carga Térmica: {domino['q_kW_m2']:.2f} kW/m²")
         
         with st.expander("🏭 Projeção 2D na Planta Baixa", expanded=False):
-            # Este módulo será completamente refatorado na Sprint 21
             st.info("Upload de Layout 2D para Heatmaps avançados em desenvolvimento (Sprint 21).")
 
 # ==============================================================================
