@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 import graphviz
 import plotly.graph_objects as go
+import plotly.express as px
 
 # Módulos Antigos e Ferramentas Visuais
 from bowtie_visual import build_bowtie_custom_figure
@@ -32,7 +33,7 @@ from risk_visuals import build_hazard_fingerprint_figure, build_source_coverage_
 from source_governance import build_evidence_ledger_df, build_source_recommendations, summarize_evidence
 from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
 
-# NOVOS MÓDULOS SPRINT 11 A 20
+# NOVOS MÓDULOS SPRINT 11 A 21
 from action_hub import build_consolidated_action_plan
 from dashboard_engine import calculate_case_readiness_index
 from i18n import t
@@ -79,33 +80,25 @@ st.markdown(APP_CSS, unsafe_allow_html=True)
 # FUNÇÕES DE BLINDAGEM E PLOTLY
 # ==============================================================================
 def is_valid_df(df):
-    """Garante que a variável é um DataFrame do Pandas e não está vazia."""
     return isinstance(df, pd.DataFrame) and not df.empty
 
 def get_action_col(df):
-    """Descobre dinamicamente a coluna de ação para evitar KeyError."""
     possible_names = ["Ação Recomendada", "Ação", "Recomendação", "Ações", "Descrição", "Ação Requerida"]
     for name in possible_names:
-        if name in df.columns:
-            return name
-    # Fallback: pega a primeira coluna que parece texto livre
+        if name in df.columns: return name
     for col in df.columns:
-        if col not in ["Origem", "Criticidade", "Status", "Responsável", "Prazo"]:
-            return col
+        if col not in ["Origem", "Criticidade", "Status", "Responsável", "Prazo"]: return col
     return df.columns[-1]
 
 def render_modern_gauge(score, band):
     color = "#10b981" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
     fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=score,
+        mode="gauge+number", value=score,
         number={'suffix': "%", 'font': {'color': "white", 'size': 45}},
         title={'text': f"Status Atual:<br><span style='font-size:1.4em; color:{color}; font-weight:800;'>{band}</span>", 'font': {'color': "#9ca3af", 'size': 14}},
         gauge={
             'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#30363d"},
-            'bar': {'color': color},
-            'bgcolor': "rgba(255,255,255,0.05)",
-            'borderwidth': 0,
+            'bar': {'color': color}, 'bgcolor': "rgba(255,255,255,0.05)", 'borderwidth': 0,
             'steps': [{'range': [0, 50], 'color': "rgba(239, 68, 68, 0.15)"}, {'range': [50, 80], 'color': "rgba(245, 158, 11, 0.15)"}, {'range': [80, 100], 'color': "rgba(16, 185, 129, 0.15)"}]
         }
     ))
@@ -114,11 +107,10 @@ def render_modern_gauge(score, band):
 
 def render_modern_radar(cri_data):
     base = cri_data.get('index', 50)
-    categories = ['Engenharia e Dados', 'Análise de Perigos', 'LOPA & Barreiras', 'MOC & Governança']
+    categories = ['Engenharia/Dados', 'PHA/Perigos', 'LOPA/Barreiras', 'MOC/PSSR']
     values = [min(100, base + 12), min(100, base - 5), min(100, base + 8), min(100, base - 10)]
     categories.append(categories[0])
     values.append(values[0])
-
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(
         r=values, theta=categories, fill='toself',
@@ -130,6 +122,41 @@ def render_modern_radar(cri_data):
             angularaxis=dict(color="#d1d5db", gridcolor="#30363d", linecolor="rgba(0,0,0,0)"), bgcolor="rgba(0,0,0,0)"
         ),
         showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(t=30, b=20, l=40, r=40), height=300
+    )
+    return fig
+
+def render_action_donut(df):
+    """ Gráfico de rosca para Gargalo de Responsáveis """
+    if not is_valid_df(df): return go.Figure()
+    abertas = df[df["Status"] != "Fechado"]
+    if abertas.empty: return go.Figure()
+    
+    count_df = abertas["Responsável"].value_counts().reset_index()
+    count_df.columns = ["Responsável", "Count"]
+    
+    fig = go.Figure(data=[go.Pie(labels=count_df["Responsável"], values=count_df["Count"], hole=.5, 
+                                 marker=dict(colors=["#3b82f6", "#f59e0b", "#ef4444", "#10b981"]))])
+    fig.update_layout(
+        title=dict(text="Ações Abertas por Equipe", font=dict(color="#d1d5db", size=14)),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
+        font=dict(color="#9ca3af", family="Inter"), margin=dict(t=40, b=10, l=10, r=10), height=250,
+        showlegend=True, legend=dict(orientation="v", y=0.5, x=1.0)
+    )
+    return fig
+
+def render_action_bar(df):
+    """ Gráfico de barras para Criticidade vs Status """
+    if not is_valid_df(df): return go.Figure()
+    
+    count_df = df.groupby(["Criticidade", "Status"]).size().reset_index(name="Count")
+    fig = px.bar(count_df, x="Criticidade", y="Count", color="Status", 
+                 color_discrete_map={"Aberto": "#ef4444", "Em Andamento": "#f59e0b", "Aguardando Verba": "#8b5cf6", "Fechado": "#10b981"},
+                 barmode="group")
+    fig.update_layout(
+        title=dict(text="Distribuição de Risco", font=dict(color="#d1d5db", size=14)),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
+        font=dict(color="#9ca3af", family="Inter"), margin=dict(t=40, b=10, l=10, r=10), height=250,
+        xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=True, gridcolor="#30363d")
     )
     return fig
 
@@ -233,7 +260,6 @@ action_df_dash = build_consolidated_action_plan(
     profile, psi_df_dash, st.session_state.get("moc_result"), st.session_state.get("pssr_result"), st.session_state.get("reactivity_result")
 )
 
-# BLINDAGEM DE DADOS E OBTENÇÃO DINÂMICA
 has_actions = is_valid_df(action_df_dash)
 num_acoes_pendentes = len(action_df_dash) if has_actions else 0
 
@@ -242,7 +268,7 @@ if has_actions and "Criticidade" in action_df_dash.columns:
     gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])])
 
 # ==============================================================================
-# MÓDULO 1: VISÃO EXECUTIVA 
+# MÓDULO 1: VISÃO EXECUTIVA
 # ==============================================================================
 if selected_module == "Visão Executiva":
     exec_tab = option_menu(
@@ -268,14 +294,11 @@ if selected_module == "Visão Executiva":
             st.plotly_chart(render_modern_radar(cri_data), use_container_width=True, theme=None, config={'displayModeBar': False})
 
     elif exec_tab == "Action Plan":
-        st.markdown("<div class='panel'><h3>Hub de Ações Interativo (Em conformidade com OSHA PSM & CCPS)</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'><b>Governança de Risco:</b> Acompanhe, delegue e feche as recomendações. O sistema mapeia requisitos de MOC e a Hierarquia de Controles NIOSH.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='panel'><h3>Centro de Comando: Ações de Mitigação (OSHA/CCPS)</h3></div>", unsafe_allow_html=True)
         
         if has_actions:
-            # Descobre a coluna de ação dinamicamente
+            # 1. SETUP DOS DADOS E COLUNAS DE GOVERNANÇA
             col_acao = get_action_col(action_df_dash)
-
-            # INJEÇÃO DAS COLUNAS DE AUDITORIA OSHA/CCPS
             if "Status" not in action_df_dash.columns: action_df_dash["Status"] = "Aberto"
             if "Responsável" not in action_df_dash.columns: action_df_dash["Responsável"] = "Engenharia"
             if "Prazo (Dias)" not in action_df_dash.columns: action_df_dash["Prazo (Dias)"] = 30
@@ -293,11 +316,36 @@ if selected_module == "Visão Executiva":
             if "Recurso" not in action_df_dash.columns:
                 action_df_dash["Recurso"] = action_df_dash["Hierarquia NIOSH"].apply(lambda x: "CAPEX" if "Engenharia" in x else "OPEX")
 
-            # Configuração dinâmica das colunas do Editor
+            # 2. MICRO-DASHBOARDS E CALCULADORA DE ORÇAMENTO (CCPS)
+            abertas_df = action_df_dash[action_df_dash["Status"] != "Fechado"]
+            custo_capex_unit, custo_opex_unit = 150000.00, 8500.00 # Valores paramétricos base
+            
+            capex_qty = len(abertas_df[abertas_df["Recurso"] == "CAPEX"])
+            opex_qty = len(abertas_df[abertas_df["Recurso"] == "OPEX"])
+            orcamento_total = (capex_qty * custo_capex_unit) + (opex_qty * custo_opex_unit)
+
+            col_chart1, col_chart2, col_budget = st.columns([1.2, 1.2, 1])
+            with col_chart1:
+                st.plotly_chart(render_action_donut(action_df_dash), use_container_width=True, theme=None, config={'displayModeBar': False})
+            with col_chart2:
+                st.plotly_chart(render_action_bar(action_df_dash), use_container_width=True, theme=None, config={'displayModeBar': False})
+            with col_budget:
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(16, 185, 129, 0.1)); border: 1px solid var(--accent-blue); border-radius: 10px; padding: 20px; height: 250px; display: flex; flex-direction: column; justify-content: center;">
+                    <div style="color: #9ca3af; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; margin-bottom: 5px;">Orçamento Estimado (CCPS)</div>
+                    <div style="color: white; font-size: 1.8rem; font-weight: 800; margin-bottom: 15px;">R$ {orcamento_total:,.2f}</div>
+                    <div style="font-size: 0.85rem; color: #d1d5db;"><span style="color:#f59e0b">● CAPEX:</span> {capex_qty} itens (Hardware)</div>
+                    <div style="font-size: 0.85rem; color: #d1d5db;"><span style="color:#3b82f6">● OPEX:</span> {opex_qty} itens (Treino/Proc.)</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("<hr style='border-color: #2a3441;'>", unsafe_allow_html=True)
+
+            # 3. TABELA DE EDIÇÃO AO VIVO
             col_config = {
                 "Status": st.column_config.SelectboxColumn("Status", options=["Aberto", "Em Andamento", "Aguardando Verba", "Fechado"], required=True),
                 "Responsável": st.column_config.SelectboxColumn("Responsável", options=["Engenharia", "Manutenção", "Operação", "HSE"]),
-                "Prazo (Dias)": st.column_config.NumberColumn("Prazo (Dias)", min_value=1, max_value=365, step=1),
+                "Prazo (Dias)": st.column_config.NumberColumn("Prazo", min_value=1, max_value=365, step=1),
                 "Requer MOC?": st.column_config.CheckboxColumn("Requer MOC?", default=False),
                 "Recurso": st.column_config.TextColumn("Recurso", disabled=True),
                 col_acao: st.column_config.TextColumn("Ação Recomendada", disabled=True, width="large"),
@@ -306,20 +354,29 @@ if selected_module == "Visão Executiva":
             if "Criticidade" in action_df_dash.columns:
                 col_config["Criticidade"] = st.column_config.TextColumn("Criticidade", disabled=True)
 
-            # Data Editor Interativo (Usando width='stretch' conforme novo padrão)
-            edited_df = st.data_editor(
-                action_df_dash,
-                width="stretch",
-                hide_index=True,
-                column_config=col_config
-            )
+            edited_df = st.data_editor(action_df_dash, width="stretch", hide_index=True, column_config=col_config)
             
             fechadas = len(edited_df[edited_df["Status"] == "Fechado"])
             total = len(edited_df)
-            progresso = fechadas / total if total > 0 else 0.0
-            st.markdown(f"**Progresso de Resolução: {fechadas}/{total} ações concluídas**")
-            st.progress(progresso)
-            st.download_button("📥 Exportar Plano (CSV) para SAP/Maximo", edited_df.to_csv(index=False).encode('utf-8'), "action_plan_compliant.csv", "text/csv")
+            st.progress(fechadas / total if total > 0 else 0.0, text=f"Progresso: {fechadas}/{total} ações concluídas")
+            
+            # 4. GERADOR DE WORKFLOW / BRIEFING
+            st.markdown("<br>", unsafe_allow_html=True)
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                st.download_button("📥 Baixar Planilha para SAP (CSV)", edited_df.to_csv(index=False).encode('utf-8'), "action_plan.csv", "text/csv", use_container_width=True)
+            with btn_col2:
+                # Monta o Briefing em TXT
+                briefing_text = f"ORDEM DE SERVIÇO - SEGURANÇA DE PROCESSOS\nAtivo: {profile.identity.get('name')}\nTopologia: {st.session_state.current_node_name}\n" + "="*50 + "\n\n"
+                for resp in edited_df[edited_df["Status"] != "Fechado"]["Responsável"].unique():
+                    briefing_text += f"[EQUIPE: {resp.upper()}]\n"
+                    acoes_resp = edited_df[(edited_df["Status"] != "Fechado") & (edited_df["Responsável"] == resp)]
+                    for _, row in acoes_resp.iterrows():
+                        crit = row.get("Criticidade", "Normal")
+                        briefing_text += f"- [{crit}] {row[col_acao]} (Prazo: {row['Prazo (Dias)']} dias)\n"
+                    briefing_text += "\n"
+                st.download_button("📋 Gerar Briefing de Manutenção (TXT)", briefing_text.encode('utf-8'), "ordem_servico.txt", "text/plain", use_container_width=True)
+
         else:
             st.info("Nenhuma ação de segurança pendente no momento. A planta está de acordo com as especificações.")
 
