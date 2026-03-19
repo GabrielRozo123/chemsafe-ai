@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import io
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
@@ -48,7 +49,7 @@ from regulatory_engine import check_regulatory_framework, generate_facilitator_q
 # MÓDULOS SPRINT 15, 16 e 17
 from map_visuals import render_map_in_streamlit
 from historical_engine import get_relevant_historical_cases
-from pid_engine import EQUIPMENT_PARAMETERS, generate_hazop_from_topology
+from pid_engine import EQUIPMENT_PARAMETERS, generate_hazop_from_topology, process_bulk_pid_nodes
 
 APP_CSS = """
 <style>
@@ -208,7 +209,7 @@ action_df_dash = build_consolidated_action_plan(
 )
 
 # ==============================================================================
-# MÓDULO 1: VISÃO EXECUTIVA
+# MÓDULO 1: VISÃO EXECUTIVA E MÓDULO 2: ENGENHARIA
 # ==============================================================================
 if selected_module == t("module_exec", lang):
     tabs = st.tabs([t("tab_dash", lang), t("tab_action", lang), "Relatório Executivo", "Casos Salvos"])
@@ -255,7 +256,6 @@ if selected_module == t("module_exec", lang):
             )
             st.session_state.report_bundle = bundle
             st.success("Relatório Gerado!")
-        
         if st.session_state.report_bundle:
             st.download_button("Baixar Markdown", st.session_state.report_bundle["markdown"], file_name=f"{report_case_name}.md")
             st.download_button("Baixar HTML", st.session_state.report_bundle["html"], file_name=f"{report_case_name}.html")
@@ -280,9 +280,6 @@ if selected_module == t("module_exec", lang):
                 apply_loaded_case(load_case(selected_case))
                 st.rerun()
 
-# ==============================================================================
-# MÓDULO 2: ENGENHARIA DE DADOS
-# ==============================================================================
 elif selected_module == t("module_eng", lang):
     tabs = st.tabs(["Overview", t("tab_compound", lang), "Comparador", "Reatividade (Lab)", "Fontes / Evidências", "📚 Lições Históricas"])
     overview_tab, compound_tab, compare_tab, reactivity_tab, sources_tab, history_tab = tabs
@@ -305,18 +302,12 @@ elif selected_module == t("module_eng", lang):
 
     with compound_tab:
         st.markdown("<div class='panel'><h3>⚖️ Calculadora de Enquadramento Regulatório</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'>Verifica se a quantidade armazenada deste composto engatilha leis rigorosas (OSHA PSM, Seveso III, NR-20).</div><br>", unsafe_allow_html=True)
-        
         inv_kg = st.number_input("Massa Armazenada na Planta (kg)", min_value=0.0, value=5000.0, step=500.0)
         alerts = check_regulatory_framework(profile, inv_kg)
         for alert in alerts:
-            if "Isento" in alert:
-                st.success(alert)
-            else:
-                st.warning(alert)
-                
+            if "Isento" in alert: st.success(alert)
+            else: st.warning(alert)
         st.markdown("<hr>", unsafe_allow_html=True)
-
         left, right = st.columns(2)
         with left:
             st.markdown("<div class='panel'><h3>Identidade e descritores</h3></div>", unsafe_allow_html=True)
@@ -337,7 +328,6 @@ elif selected_module == t("module_eng", lang):
         with c2:
             if st.button("Comparar", type="primary", width="stretch") and st.session_state.compare_query:
                 st.session_state.compare_profile = build_compound_profile(st.session_state.compare_query)
-
         if st.session_state.compare_profile:
             st.dataframe(build_comparison_df(profile, st.session_state.compare_profile), width="stretch", hide_index=True)
 
@@ -349,7 +339,6 @@ elif selected_module == t("module_eng", lang):
             if st.button("Carregar para Mistura", type="primary", width="stretch") and partner_query:
                 st.session_state.reactivity_partner_profile = build_compound_profile(partner_query)
                 st.session_state.reactivity_result = evaluate_pairwise_reactivity(profile, st.session_state.reactivity_partner_profile)
-
         res = st.session_state.get("reactivity_result")
         if res:
             summary = res["summary"]
@@ -365,55 +354,82 @@ elif selected_module == t("module_eng", lang):
 
     with history_tab:
         st.markdown("<div class='panel'><h3>📚 Lições Históricas de Engenharia</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'>Base curada de acidentes da indústria química selecionados automaticamente pelos perigos e propriedades físicas do composto atual.</div><br>", unsafe_allow_html=True)
-        
         relevant_cases = get_relevant_historical_cases(profile)
-        
         if not relevant_cases:
-            st.info("Nenhum evento histórico correlato encontrado para este perfil específico na base curada.")
+            st.info("Nenhum evento histórico correlato encontrado.")
         else:
             for case in relevant_cases:
                 st.markdown(f"<div class='history-card'>", unsafe_allow_html=True)
                 st.subheader(f"{case['evento']} ({case['ano']}) - {case['local']}")
-                st.caption(f"**Match do App:** {case['relevancia']} | **Fonte:** {case['fonte']} ({case['classe_fonte']})")
-                
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.write(f"**Substância Envolvida:** {case['substancia_principal']} (CAS: {case['cas_associado']})")
-                    st.write(f"**Tipo de Evento:** {case['tipo_evento']}")
+                    st.write(f"**Substância:** {case['substancia_principal']}")
+                    st.write(f"**Tipo:** {case['tipo_evento']}")
                     st.write(f"**Mecanismo:** {case['mecanismo']}")
                 with c2:
                     st.error(f"**Consequências:** {case['consequencias']}")
-                    st.warning("**Barreiras que Falharam:**")
-                    for b in case["barreiras_falharam"]: st.markdown(f"- {b}")
-                
                 st.success("**Lições Aprendidas:**")
                 for l in case["licoes_aprendidas"]: st.markdown(f"- {l}")
-                
-                st.markdown("</div><hr>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
 # ==============================================================================
-# MÓDULO 3: ANÁLISE DE RISCO
+# MÓDULO 3: ANÁLISE DE RISCO (COM UPLOAD BULK)
 # ==============================================================================
 elif selected_module == t("module_risk", lang):
-    # SPRINT 17: Adicionado o "Construtor P&ID" como a primeira aba do fluxo de risco
     tabs = st.tabs(["🏗️ Construtor P&ID", "Segregação de Área", "HAZOP (Matriz)", "Bow-Tie", "LOPA", t("tab_whatif", lang), "Consequências"])
     pid_tab, area_tab, hazop_tab, bowtie_tab, lopa_tab, whatif_tab, cons_tab = tabs
 
     with pid_tab:
         st.markdown("<div class='panel'><h3>Construtor de Topologia (P&ID Node Builder)</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'>Selecione os equipamentos presentes no Nó do P&ID. O motor irá cruzar a topologia com o perfil termodinâmico do composto e preencher o HAZOP automaticamente.</div><br>", unsafe_allow_html=True)
         
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            node_name = st.text_input("Nome/TAG do Nó", value="Nó 1: Linha de Recalque", help="Ex: Linha do Tanque TK-100 para Bomba P-101")
-        with col2:
-            equipment_options = list(EQUIPMENT_PARAMETERS.keys())
-            selected_equipment = st.multiselect("Equipamentos e Linhas neste Nó", options=equipment_options, default=["Tanque de Armazenamento", "Tubulação / Linha de Transferência", "Bomba Centrífuga"])
+        t1, t2 = st.tabs(["📝 Modo Rápido (Manual)", "📊 Modo Corporativo (Upload de CSV/Excel)"])
+        
+        with t1:
+            st.markdown("<div class='note-card'>Selecione os equipamentos presentes no Nó do P&ID.</div><br>", unsafe_allow_html=True)
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                node_name = st.text_input("Nome/TAG do Nó", value="Nó 1: Linha de Recalque")
+            with col2:
+                equipment_options = list(EQUIPMENT_PARAMETERS.keys())
+                selected_equipment = st.multiselect("Equipamentos e Linhas neste Nó", options=equipment_options, default=["Tanque de Armazenamento Atmosférico", "Bomba Centrífuga"])
+                
+            if st.button("🚀 Gerar Cenários HAZOP via Topologia", type="primary"):
+                st.session_state.pid_hazop_matrix = generate_hazop_from_topology(node_name, selected_equipment, profile)
+                st.success(f"Matriz HAZOP gerada com sucesso! {len(st.session_state.pid_hazop_matrix)} cenários mapeados.")
+                
+        with t2:
+            st.markdown("""
+            <div class='note-card'>
+            <b>Importação em Lote (Smart Bulk Import):</b> Exporte a lista de linhas/equipamentos do seu software CAD (AVEVA, SmartPlant) e gere os cenários para a planta inteira instantaneamente.<br>
+            <i>Sua planilha precisa de apenas 2 colunas: <b>Nó</b> e <b>Equipamento</b></i>.
+            </div><br>
+            """, unsafe_allow_html=True)
             
-        if st.button("🚀 Gerar Cenários HAZOP via Topologia", type="primary"):
-            st.session_state.pid_hazop_matrix = generate_hazop_from_topology(node_name, selected_equipment, profile)
-            st.success(f"Matriz HAZOP gerada com sucesso! Foram mapeados {len(st.session_state.pid_hazop_matrix)} cenários com base na física do composto. Vá para a aba 'HAZOP (Matriz)'.")
+            uploaded_file = st.file_uploader("Carregue o arquivo CSV ou Excel da Master Equipment List", type=["csv", "xlsx"])
+            
+            # Botão de download de modelo
+            csv_modelo = "Nó,Equipamento\nNó 1 - Alimentação,Tanque de Armazenamento Atmosférico\nNó 1 - Alimentação,Bomba Centrífuga\nNó 2 - Reação,Reator Químico\nNó 2 - Reação,Válvula de Controle\nNó 3 - Destilação,Coluna de Destilação / Absorção"
+            st.download_button("Baixar Planilha Modelo", data=csv_modelo, file_name="modelo_bulk_hazop.csv", mime="text/csv")
+            
+            if uploaded_file is not None:
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df_bulk = pd.read_csv(uploaded_file)
+                    else:
+                        df_bulk = pd.read_excel(uploaded_file)
+                        
+                    st.write("Visualização dos Dados Importados:")
+                    st.dataframe(df_bulk.head(), use_container_width=True)
+                    
+                    if st.button("⚡ Processar P&ID em Lote (Bulk Mode)", type="primary"):
+                        bulk_results = process_bulk_pid_nodes(df_bulk, profile)
+                        if bulk_results:
+                            st.session_state.pid_hazop_matrix = bulk_results
+                            st.success(f"Incrível! Processamos {len(df_bulk['Nó'].unique())} Nós e geramos {len(bulk_results)} cenários preenchidos. Vá para a aba HAZOP!")
+                        else:
+                            st.error("Erro: Verifique se os nomes dos equipamentos batem exatamente com o modelo.")
+                except Exception as e:
+                    st.error(f"Erro ao ler o arquivo: {e}")
 
     with area_tab:
         st.markdown("<div class='panel'><h3>Segregação por Área de Risco</h3></div>", unsafe_allow_html=True)
@@ -438,9 +454,12 @@ elif selected_module == t("module_risk", lang):
 
         # Matriz Gerada pelo Construtor P&ID
         if st.session_state.get("pid_hazop_matrix"):
-            st.markdown("<div class='panel'><h3>Matriz HAZOP (Gerada da Topologia P&ID)</h3></div>", unsafe_allow_html=True)
+            st.markdown("<div class='panel'><h3>Matriz HAZOP (Inteligência Artificial Determinística)</h3></div>", unsafe_allow_html=True)
             df_hazop_auto = pd.DataFrame(st.session_state.pid_hazop_matrix)
             st.dataframe(df_hazop_auto, width="stretch", hide_index=True)
+            
+            csv_export = df_hazop_auto.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Exportar Matriz HAZOP Final (CSV)", data=csv_export, file_name="hazop_export_chemsafe.csv", mime="text/csv")
         else:
             st.info("💡 Vá na aba '🏗️ Construtor P&ID' para gerar uma matriz inteligente baseada na planta, ou use a Worksheet Base abaixo.")
 
@@ -486,12 +505,10 @@ elif selected_module == t("module_risk", lang):
             crit_val = {"Fatalidade — 1e-5": 1e-5, "Lesão Grave — 1e-4": 1e-4, "Lesão Leve — 1e-3": 1e-3}[crit]
         with right:
             selected = st.multiselect("Selecione as IPLs", [f"{n} (PFD={p})" for n, p in IPL_CATALOG])
-        
         if st.button("Calcular LOPA", type="primary"):
             chosen = [(n, p) for label in selected for n, p in IPL_CATALOG if n in label]
             st.session_state.selected_ipl_names = selected
             st.session_state.lopa_result = compute_lopa(f_ie, crit_val, chosen)
-
         res = st.session_state.lopa_result
         if res:
             a, b, c, d = st.columns(4)
@@ -520,7 +537,6 @@ elif selected_module == t("module_risk", lang):
     with cons_tab:
         st.markdown("<div class='panel'><h3>Modelagem de Consequências</h3></div>", unsafe_allow_html=True)
         tox_t, fire_t, map_t = st.tabs(["Dispersão Tóxica (Gaussiana)", "Fogo em Poça (Pool Fire)", "🌍 Mapa de Impacto"])
-        
         with tox_t:
             c1, c2, c3 = st.columns(3)
             q_gs = c1.number_input("Q (g/s)", value=10.0)
@@ -530,7 +546,6 @@ elif selected_module == t("module_risk", lang):
                 mw = profile.identity.get("molecular_weight", 20.0) or 20.0
                 st.session_state.dispersion_result = gaussian_dispersion(q_gs, u_ms, stab, float(profile.limit("IDLH_ppm", 300)), float(mw), 0)
                 st.write(f"**Distância até IDLH:** {st.session_state.dispersion_result.get('x_idlh', '>3000')} metros")
-
         with fire_t:
             c1, c2 = st.columns(2)
             diam = c1.number_input("Diâmetro (m)", value=5.0)
@@ -538,28 +553,15 @@ elif selected_module == t("module_risk", lang):
             if st.button("Calcular Pool Fire"):
                 st.session_state.pool_fire_result = pool_fire(diam, 0.05, 44000, dist)
                 st.write(f"**Fluxo Térmico no alvo:** {st.session_state.pool_fire_result['q_kW_m2']:.2f} kW/m²")
-
         with map_t:
             st.subheader("🌍 Análise Geoespacial de Impacto")
-            st.markdown("Visualize as zonas térmicas e tóxicas sobrepostas na instalação.")
-
             col_lat, col_lon = st.columns(2)
-            with col_lat:
-                lat = st.number_input("Latitude", value=-22.8188, format="%.6f", help="Coordenada Y da origem do evento")
-            with col_lon:
-                lon = st.number_input("Longitude", value=-47.0635, format="%.6f", help="Coordenada X da origem do evento")
-
+            with col_lat: lat = st.number_input("Latitude", value=-22.8188, format="%.6f")
+            with col_lon: lon = st.number_input("Longitude", value=-47.0635, format="%.6f")
             current_dispersion = st.session_state.get("dispersion_result", None)
             current_thermal = st.session_state.get("pool_fire_result", None)
-
             with st.expander("🗺️ Abrir Mapa de Impacto (Satélite)", expanded=True):
-                render_map_in_streamlit(
-                    lat=lat, 
-                    lon=lon, 
-                    dispersion_data=current_dispersion, 
-                    thermal_data=current_thermal
-                )
-                st.caption("*Use o controle de camadas no canto superior direito do mapa para alternar entre visão de Satélite e Mapa Claro para exportação.*")
+                render_map_in_streamlit(lat=lat, lon=lon, dispersion_data=current_dispersion, thermal_data=current_thermal)
 
 # ==============================================================================
 # MÓDULO 4: GESTÃO DE MUDANÇA
@@ -584,10 +586,8 @@ elif selected_module == t("module_change", lang):
             p1 = st.checkbox("Mudança Temporária")
             p2 = st.checkbox("Afeta Proteções (SIS/PSV)")
             p3 = st.checkbox("Envolve Bypass / Override")
-        
         if st.button("Avaliar Criticidade do MOC", type="primary"):
             st.session_state.moc_result = evaluate_moc(profile, change_type, impacts, desc, temporary=p1, protections_changed=p2, bypass_or_override=p3)
-            
         res = st.session_state.get("moc_result")
         if res:
             st.markdown(f"<br><b>Classe do MOC:</b> {res['summary']['category']} | <b>Score:</b> {res['summary']['score']}/100", unsafe_allow_html=True)
@@ -604,10 +604,8 @@ elif selected_module == t("module_change", lang):
             d4 = st.checkbox("PSV e bloqueios inspecionados")
             d5 = st.checkbox("Alarmes testados")
             d6 = st.checkbox("Autorização gerencial assinada")
-            
         if st.button("Calcular Prontidão PSSR", type="primary"):
             st.session_state.pssr_result = evaluate_pssr(design_ok=d1, procedures_ok=d2, training_ok=d3, relief_verified=d4, alarms_tested=d5, startup_authorized=d6, pha_or_moc_ok=True, mi_ready=True, emergency_ready=True, scope_label="PSSR")
-            
         res = st.session_state.get("pssr_result")
         if res:
             st.markdown(f"<br><b>Status:</b> {res['summary']['readiness']} | <b>Score:</b> {res['summary']['score']}/100", unsafe_allow_html=True)
