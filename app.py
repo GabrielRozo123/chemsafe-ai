@@ -56,6 +56,7 @@ APP_CSS = """
 .panel:hover { border-color: var(--accent-blue); box-shadow: 0 4px 20px var(--accent-glow); }
 .panel h3 { margin-top: 0; color: #f3f4f6; font-size: 1.15rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 20px; }
 
+/* FIX: Garante que os valores das métricas e textos não sejam cortados */
 .metric-box { background: rgba(30, 41, 59, 0.5); border: 1px solid var(--border-color); border-radius: 10px; padding: 15px 20px; text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 120px; }
 .metric-label { color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 .metric-value { color: #f9fafb; font-size: 1.8rem; font-weight: 800; margin-top: 8px; line-height: 1.2; white-space: normal; word-wrap: break-word; }
@@ -64,6 +65,7 @@ APP_CSS = """
 .note-card { background: rgba(59, 130, 246, 0.08); border-left: 4px solid var(--accent-blue); padding: 15px; border-radius: 6px; font-size: 0.9rem; margin-bottom: 20px; color: #bfdbfe; }
 .stExpander { border: 1px solid var(--border-color) !important; border-radius: 10px !important; background: var(--card-bg) !important; }
 
+/* SPRINT 23/24: DOC CARDS ESTILO VERCEL */
 .doc-card { background: rgba(30, 41, 59, 0.4); border: 1px solid #374151; border-radius: 12px; padding: 20px; height: 100%; transition: all 0.3s ease; cursor: pointer; }
 .doc-card:hover { border-color: var(--accent-blue); transform: translateY(-3px); box-shadow: 0 8px 20px rgba(59, 130, 246, 0.15); background: rgba(30, 41, 59, 0.7); }
 .doc-tag { background: rgba(59, 130, 246, 0.15); color: #60a5fa; font-size: 0.75rem; padding: 4px 10px; border-radius: 6px; font-weight: 700; text-transform: uppercase; display: inline-block; margin-bottom: 10px; border: 1px solid rgba(59, 130, 246, 0.3); }
@@ -72,6 +74,8 @@ APP_CSS = """
 .history-timeline { border-left: 3px solid #3b82f6; margin-left: 20px; padding-left: 20px; }
 .history-item { margin-bottom: 25px; position: relative; }
 .history-item::before { content: ''; position: absolute; left: -28px; top: 0; width: 14px; height: 14px; background: var(--bg-color); border: 3px solid #3b82f6; border-radius: 50%; }
+
+/* Menu Styles Overrides */
 .nav-link { font-family: 'Inter', sans-serif !important; }
 </style>
 """
@@ -80,30 +84,18 @@ st.set_page_config(page_title="ChemSafe Pro Enterprise", page_icon="⚗️", lay
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# FUNÇÕES DE BLINDAGEM E AUXILIARES
+# FUNÇÕES DE BLINDAGEM E AUXILIARES DE ENGENHARIA E CUSTOS
 # ==============================================================================
 def is_valid_df(df):
     return isinstance(df, pd.DataFrame) and not df.empty
-
-def get_action_col(df):
-    for col in ["Ação Recomendada", "Ação", "Recomendação", "Ações", "Action Required"]:
-        if col in df.columns: return col
-    return df.columns[0]
 
 def sanitize_and_translate_action_df(df):
     """Limpa os dados do backend e traduz colunas/status para Português (PT-BR)"""
     if not is_valid_df(df): return df
     
-    # Renomear colunas do inglês para o português, se existirem
-    rename_map = {
-        "Origin": "Origem",
-        "Action Required": "Ação Recomendada",
-        "Criticality": "Criticidade",
-        "Status": "Status"
-    }
+    rename_map = {"Origin": "Origem", "Action Required": "Ação Recomendada", "Criticality": "Criticidade", "Status": "Status"}
     df = df.rename(columns=rename_map)
     
-    # Padronizar a coluna de Status para as métricas não quebrarem
     if "Status" in df.columns:
         df["Status"] = df["Status"].replace({"Pendente": "Aberto", "Pending": "Aberto", "Open": "Aberto", "Closed": "Fechado", "In Progress": "Em Andamento"})
     else:
@@ -111,18 +103,21 @@ def sanitize_and_translate_action_df(df):
         
     return df
 
+def get_action_col(df):
+    for col in ["Ação Recomendada", "Ação", "Recomendação", "Ações"]:
+        if col in df.columns: return col
+    return df.columns[0]
+
 def estimate_mitigation_cost(action_text):
     """
     Rigor Econômico: Baseado na AACE International (Class 5 Estimate) e CCPS.
     Retorna o valor estimado (R$) e a categoria contábil da recomendação.
     """
     text = str(action_text).lower()
-    if any(k in text for k in ["sis", "intertravamento", "sil", "clp", "automação"]):
+    if any(k in text for k in ["sis", "intertravamento", "sil", "clp", "automação", "sensor"]):
         return 250000.0, "CAPEX (SIS/Automação)"
-    elif any(k in text for k in ["válvula", "psv", "alívio", "ruptura", "bomba"]):
+    elif any(k in text for k in ["válvula", "psv", "alívio", "ruptura", "bomba", "tubulação"]):
         return 45000.0, "CAPEX (Mecânica)"
-    elif any(k in text for k in ["alarme", "sensor", "detector", "f&g", "transmissor"]):
-        return 35000.0, "CAPEX (Instrumentação)"
     elif any(k in text for k in ["instalar", "modificar", "trocar", "construir"]):
         return 80000.0, "CAPEX (Infraestrutura)"
     elif any(k in text for k in ["procedimento", "treinar", "revisar", "atualizar", "documento", "limites"]):
@@ -131,7 +126,7 @@ def estimate_mitigation_cost(action_text):
         return 15000.0, "OPEX (Geral/Estudos)"
 
 # ==============================================================================
-# MOTORES GRÁFICOS PLOTLY
+# MOTORES GRÁFICOS PLOTLY (EMBUTIDOS SPRINT 24)
 # ==============================================================================
 def render_modern_gauge(score, band):
     color = "#10b981" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
@@ -151,7 +146,6 @@ def render_action_analytics(df):
     fig1 = px.pie(resp_counts, values='count', names='Responsável', hole=.5, color_discrete_sequence=px.colors.qualitative.Safe)
     fig1.update_layout(title="Distribuição por Equipe", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#9ca3af", height=250, margin=dict(t=40, b=0, l=0, r=0))
     
-    # Garantir que as cores batam com os status
     color_map = {"Aberto": "#ef4444", "Fechado": "#10b981", "Em Andamento": "#3b82f6", "Aguardando Verba": "#f59e0b"}
     count_df = df.groupby(["Criticidade", "Status"]).size().reset_index(name="Count")
     fig2 = px.bar(count_df, x="Criticidade", y="Count", color="Status", barmode="group", color_discrete_map=color_map)
@@ -159,12 +153,15 @@ def render_action_analytics(df):
     return fig1, fig2
 
 def render_flammability_envelope(lfl, ufl, loc):
+    """Renderiza o Envelope de Inflamabilidade NFPA 69 (Coward Triangle)"""
     fig = go.Figure()
     x_o2 = [0, loc, 21, 21, 0] 
     y_fuel = [0, lfl, lfl, ufl, 0]
+    
     fig.add_trace(go.Scatter(x=x_o2, y=y_fuel, fill='toself', fillcolor='rgba(239, 68, 68, 0.2)', line=dict(color='#ef4444', width=2), name="Zona de Explosão"))
-    safe_margin = loc * 0.6
-    fig.add_trace(go.Scatter(x=[safe_margin], y=[lfl/2], mode='markers+text', marker=dict(color='#10b981', size=12), text=["Zona Segura (Purga)"], textposition="bottom center", name="Safe Margin"))
+    safe_margin = loc * 0.6  
+    fig.add_trace(go.Scatter(x=[safe_margin], y=[lfl/2], mode='markers+text', marker=dict(color='#10b981', size=12), text=["Zona Segura (Purga)"], textposition="bottom center", name="Margem Segura"))
+                             
     fig.update_layout(
         title="Envelope de Inflamabilidade (O₂ vs Combustível)",
         xaxis_title="Concentração de Oxigênio (% vol)", yaxis_title="Concentração de Combustível (% vol)",
@@ -197,7 +194,7 @@ def metric_card(label: str, value: str, klass: str = "risk-blue") -> str:
     return f"<div class='metric-box'><div class='metric-label'>{label}</div><div class='metric-value {klass}'>{value}</div></div>"
 
 # ==============================================================================
-# SIDEBAR NAVEGAÇÃO & BUSCA OTIMIZADA
+# SIDEBAR NAVEGAÇÃO E BUSCA OTIMIZADA
 # ==============================================================================
 with st.sidebar:
     lang = st.radio("🌐 Idioma", ["pt", "en"], horizontal=True, label_visibility="collapsed")
@@ -233,7 +230,7 @@ st.markdown(f'<div class="context-header"><div>🧪 Ativo Analisado: <span>{prof
 psi_df = build_psi_readiness_df(profile, st.session_state.get("lopa_result"), {"threats":[]})
 cri = calculate_case_readiness_index(profile, summarize_psi_readiness(psi_df), None, None, st.session_state.get("lopa_result"), None)
 
-# Obtendo e Sanitizando as Ações
+# Obtendo e Sanitizando as Ações (PT-BR Forçado)
 action_df_raw = build_consolidated_action_plan(profile, psi_df, None, None, None)
 action_df = sanitize_and_translate_action_df(action_df_raw)
 
@@ -288,8 +285,8 @@ if selected_module == "Visão Executiva":
                 <div style="background:rgba(59,130,246,0.1); border:1px solid #3b82f6; border-radius:10px; padding:20px; height:250px; display:flex; flex-direction:column; justify-content:center;">
                     <small style='color:#9ca3af'>ORÇAMENTO ESTIMADO (AACE CLASSE 5)</small>
                     <h2 style='color:white; margin:10px 0;'>R$ {budget_total:,.2f}</h2>
-                    <p style='font-size:0.8rem; color:#d1d5db;'><span style="color:#f59e0b">● CAPEX:</span> {capex_count} requisições de hardware<br>
-                    <span style="color:#3b82f6">● OPEX:</span> {opex_count} revisões/estudos</p>
+                    <p style='font-size:0.8rem; color:#d1d5db;'><span style="color:#f59e0b">● CAPEX:</span> {capex_count} ações (Equipamentos)<br>
+                    <span style="color:#3b82f6">● OPEX:</span> {opex_count} ações (Engenharia/SGI)</p>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -342,7 +339,7 @@ elif selected_module == "Engenharia":
             loc = st.number_input("LOC (% Oxigênio)", value=10.5, help="Concentração limite de O2 segundo NFPA 69")
             
             safe_o2 = loc * 0.6
-            st.metric("Margem de Segurança Sugerida", f"O₂ < {safe_o2:.1f}%")
+            st.metric("Margem de Segurança Sugerida (Alarme Alto)", f"O₂ < {safe_o2:.1f}%")
         
         with c2:
             fig_flam = render_flammability_envelope(lfl, ufl, loc)
@@ -372,7 +369,7 @@ elif selected_module == "Engenharia":
                 with st.popover("⚙️ Configurar Cinética (CCPS)"):
                     t0 = st.number_input("Temp. Processo (°C)", 80.0)
                     ea = st.number_input("Energia Ativação (kJ/mol)", 100.0)
-                if st.button("Estimar TMR", use_container_width=True):
+                if st.button("Estimar TMR (Time to Maximum Rate)", use_container_width=True):
                     res = calculate_tmr_adiabatic(t0, ea, 1e12, 1500, 2.5)
                     st.error(f"Tempo p/ Explosão Adibática: **{res['tmr_min']:.1f} min**")
 
@@ -398,13 +395,13 @@ elif selected_module == "Análise de Risco":
 
     elif r_tab == "Verificação SIL (IEC)":
         st.markdown("<div class='panel'><h3>🖲️ Análise de Arquitetura de Intertravamento (IEC 61511)</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'>Cálculo paramétrico da Probabilidade Média de Falha sob Demanda ($PFD_{avg}$) garantindo a rastreabilidade matemática para auditorias SIF.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='note-card'>Cálculo paramétrico da Probabilidade Média de Falha sob Demanda (PFDavg) garantindo a conformidade da malha SIF e rastreabilidade para auditorias.</div>", unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
             arq = st.selectbox("Arquitetura de Sensores/Válvulas", ["1oo1 (Simplex)", "1oo2 (Redundante)", "2oo3 (Votação)"])
             lambda_du = st.number_input("Taxa de Falha Perigosa (λdu) - falhas/hora", 1e-6, format="%.2e")
-            ti_meses = st.number_input("Intervalo de Proof Test (Meses)", 12)
+            ti_meses = st.number_input("Intervalo de Teste (Proof Test - Meses)", 12)
             ti_horas = ti_meses * 730
             
         with col2:
