@@ -33,7 +33,7 @@ from risk_visuals import build_hazard_fingerprint_figure, build_source_coverage_
 from source_governance import build_evidence_ledger_df, build_source_recommendations, summarize_evidence
 from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
 
-# NOVOS MÓDULOS SPRINT 11 A 21
+# NOVOS MÓDULOS SPRINT 11 A 23
 from action_hub import build_consolidated_action_plan
 from dashboard_engine import calculate_case_readiness_index
 from i18n import t
@@ -52,7 +52,7 @@ from runaway_engine import calculate_tmr_adiabatic
 
 from streamlit_option_menu import option_menu
 
-# CSS: Interface Vale do Silício Premium
+# CSS: Interface Vale do Silício Premium + Cards de Documentação
 APP_CSS = """
 <style>
 :root { --bg-color: #0b0f19; --card-bg: #151b28; --border-color: #2a3441; --text-main: #d1d5db; --accent-blue: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.15); }
@@ -63,12 +63,22 @@ APP_CSS = """
 .panel { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.8rem; margin-bottom: 1.2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.15); transition: border-color 0.3s ease; }
 .panel:hover { border-color: var(--accent-blue); box-shadow: 0 4px 20px var(--accent-glow); }
 .panel h3 { margin-top: 0; color: #f3f4f6; font-size: 1.15rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 20px; }
-.metric-box { background: rgba(30, 41, 59, 0.5); border: 1px solid var(--border-color); border-radius: 10px; padding: 15px 20px; text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 125px; }
+.metric-box { background: rgba(30, 41, 59, 0.5); border: 1px solid var(--border-color); border-radius: 10px; padding: 15px 20px; text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 135px; }
 .metric-label { color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-.metric-value { color: #f9fafb; font-size: 2rem; font-weight: 800; margin-top: 8px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.metric-value { color: #f9fafb; font-size: 1.8rem; font-weight: 800; margin-top: 8px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: normal; word-wrap: break-word; }
 .risk-blue { color: var(--accent-blue); } .risk-green { color: #10b981; } .risk-amber { color: #f59e0b; } .risk-red { color: #ef4444; }
-.note-card { background: rgba(59, 130, 246, 0.08); border-left: 4px solid var(--accent-blue); padding: 15px; border-radius: 6px; font-size: 0.9rem; margin-bottom: 20px; color: #bfdbfe; line-height: 1.5; }
-.history-card { background: rgba(22, 27, 34, 0.8); border-left: 4px solid #d29922; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+
+/* SPRINT 23: DOC CARDS ESTILO VERCEL/STRIPE */
+.doc-card { background: rgba(30, 41, 59, 0.4); border: 1px solid #374151; border-radius: 12px; padding: 20px; height: 100%; transition: all 0.3s ease; cursor: pointer; }
+.doc-card:hover { border-color: var(--accent-blue); transform: translateY(-3px); box-shadow: 0 8px 20px rgba(59, 130, 246, 0.15); background: rgba(30, 41, 59, 0.7); }
+.doc-tag { background: rgba(59, 130, 246, 0.15); color: #60a5fa; font-size: 0.75rem; padding: 4px 10px; border-radius: 6px; font-weight: 700; text-transform: uppercase; display: inline-block; margin-bottom: 10px; border: 1px solid rgba(59, 130, 246, 0.3); }
+.doc-title { font-size: 1.1rem; font-weight: 700; color: #f3f4f6; margin-bottom: 8px; display: block; }
+.doc-desc { font-size: 0.9rem; color: #9ca3af; line-height: 1.5; }
+
+.history-timeline { border-left: 3px solid #3b82f6; margin-left: 20px; padding-left: 20px; }
+.history-item { margin-bottom: 25px; position: relative; }
+.history-item::before { content: ''; position: absolute; left: -28px; top: 0; width: 14px; height: 14px; background: var(--bg-color); border: 3px solid #3b82f6; border-radius: 50%; }
+
 .stExpander { border: 1px solid var(--border-color) !important; border-radius: 10px !important; background: var(--card-bg) !important; overflow: hidden; }
 </style>
 """
@@ -126,7 +136,6 @@ def render_modern_radar(cri_data):
     return fig
 
 def render_action_donut(df):
-    """ Gráfico de rosca para Gargalo de Responsáveis """
     if not is_valid_df(df): return go.Figure()
     abertas = df[df["Status"] != "Fechado"]
     if abertas.empty: return go.Figure()
@@ -145,7 +154,6 @@ def render_action_donut(df):
     return fig
 
 def render_action_bar(df):
-    """ Gráfico de barras para Criticidade vs Status """
     if not is_valid_df(df): return go.Figure()
     
     count_df = df.groupby(["Criticidade", "Status"]).size().reset_index(name="Count")
@@ -177,9 +185,6 @@ if "lopa_result" not in st.session_state: st.session_state.lopa_result = None
 if "pid_hazop_matrix" not in st.session_state: st.session_state.pid_hazop_matrix = []
 if "current_node_name" not in st.session_state: st.session_state.current_node_name = "Nó 101: Bomba de Recalque"
 if "current_case_name" not in st.session_state: st.session_state.current_case_name = ""
-if "current_case_notes" not in st.session_state: st.session_state.current_case_notes = ""
-if "dispersion_result" not in st.session_state: st.session_state.dispersion_result = None
-if "pool_fire_result" not in st.session_state: st.session_state.pool_fire_result = None
 
 def metric_card(label: str, value: str, klass: str = "risk-blue") -> str:
     return f"<div class='metric-box'><div class='metric-label'>{label}</div><div class='metric-value {klass}'>{value}</div></div>"
@@ -190,13 +195,7 @@ def load_profile_from_key(key: str) -> None:
     st.session_state.selected_compound_key = key
 
 def bowtie_payload():
-    return {
-        "threats": [x.strip() for x in st.session_state.get("bowtie_threats", "").splitlines() if x.strip()],
-        "barriers_pre": [x.strip() for x in st.session_state.get("bowtie_pre", "").splitlines() if x.strip()],
-        "top_event": st.session_state.get("bowtie_top", "Perda de contenção"),
-        "barriers_mit": [x.strip() for x in st.session_state.get("bowtie_mit", "").splitlines() if x.strip()],
-        "consequences": [x.strip() for x in st.session_state.get("bowtie_cons", "").splitlines() if x.strip()],
-    }
+    return {"threats": [], "barriers_pre": [], "top_event": "Perda de contenção", "barriers_mit": [], "consequences": []}
 
 def apply_loaded_case(case_data: dict):
     query_hint = case_data.get("query_hint") or case_data.get("compound_name")
@@ -217,8 +216,9 @@ with st.sidebar:
     
     selected_module = option_menu(
         menu_title=None,
-        options=["Visão Executiva", "Engenharia", "Análise de Risco", "Mudanças"],
-        icons=["speedometer2", "cpu", "shield-lock", "arrow-repeat"],
+        # INCLUSÃO DA NOVA ABA: BASE DE CONHECIMENTO
+        options=["Visão Executiva", "Engenharia", "Análise de Risco", "Mudanças", "Base de Conhecimento"],
+        icons=["speedometer2", "cpu", "shield-lock", "arrow-repeat", "book"],
         default_index=0,
         styles={
             "container": {"background-color": "transparent", "padding": "0"},
@@ -297,7 +297,6 @@ if selected_module == "Visão Executiva":
         st.markdown("<div class='panel'><h3>Centro de Comando: Ações de Mitigação (OSHA/CCPS)</h3></div>", unsafe_allow_html=True)
         
         if has_actions:
-            # 1. SETUP DOS DADOS E COLUNAS DE GOVERNANÇA
             col_acao = get_action_col(action_df_dash)
             if "Status" not in action_df_dash.columns: action_df_dash["Status"] = "Aberto"
             if "Responsável" not in action_df_dash.columns: action_df_dash["Responsável"] = "Engenharia"
@@ -307,8 +306,8 @@ if selected_module == "Visão Executiva":
             def classify_hierarchy(action_text):
                 text = str(action_text).lower()
                 if any(word in text for word in ["instalar", "válvula", "psv", "sis", "alarme", "bomba", "trocar"]): return "Engenharia (Hardware)"
-                elif any(word in text for word in ["revisar", "treinar", "procedimento", "atualizar"]): return "Administrativo (Procedimento)"
-                return "Mitigação (Emergência)"
+                elif any(word in text for word in ["revisar", "treinar", "procedimento", "atualizar"]): return "Administrativo"
+                return "Mitigação"
                 
             if "Hierarquia NIOSH" not in action_df_dash.columns:
                 action_df_dash["Hierarquia NIOSH"] = action_df_dash[col_acao].apply(classify_hierarchy)
@@ -316,19 +315,16 @@ if selected_module == "Visão Executiva":
             if "Recurso" not in action_df_dash.columns:
                 action_df_dash["Recurso"] = action_df_dash["Hierarquia NIOSH"].apply(lambda x: "CAPEX" if "Engenharia" in x else "OPEX")
 
-            # 2. MICRO-DASHBOARDS E CALCULADORA DE ORÇAMENTO (CCPS)
             abertas_df = action_df_dash[action_df_dash["Status"] != "Fechado"]
-            custo_capex_unit, custo_opex_unit = 150000.00, 8500.00 # Valores paramétricos base
+            custo_capex_unit, custo_opex_unit = 150000.00, 8500.00
             
             capex_qty = len(abertas_df[abertas_df["Recurso"] == "CAPEX"])
             opex_qty = len(abertas_df[abertas_df["Recurso"] == "OPEX"])
             orcamento_total = (capex_qty * custo_capex_unit) + (opex_qty * custo_opex_unit)
 
             col_chart1, col_chart2, col_budget = st.columns([1.2, 1.2, 1])
-            with col_chart1:
-                st.plotly_chart(render_action_donut(action_df_dash), use_container_width=True, theme=None, config={'displayModeBar': False})
-            with col_chart2:
-                st.plotly_chart(render_action_bar(action_df_dash), use_container_width=True, theme=None, config={'displayModeBar': False})
+            with col_chart1: st.plotly_chart(render_action_donut(action_df_dash), use_container_width=True, theme=None, config={'displayModeBar': False})
+            with col_chart2: st.plotly_chart(render_action_bar(action_df_dash), use_container_width=True, theme=None, config={'displayModeBar': False})
             with col_budget:
                 st.markdown(f"""
                 <div style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(16, 185, 129, 0.1)); border: 1px solid var(--accent-blue); border-radius: 10px; padding: 20px; height: 250px; display: flex; flex-direction: column; justify-content: center;">
@@ -341,7 +337,6 @@ if selected_module == "Visão Executiva":
 
             st.markdown("<hr style='border-color: #2a3441;'>", unsafe_allow_html=True)
 
-            # 3. TABELA DE EDIÇÃO AO VIVO
             col_config = {
                 "Status": st.column_config.SelectboxColumn("Status", options=["Aberto", "Em Andamento", "Aguardando Verba", "Fechado"], required=True),
                 "Responsável": st.column_config.SelectboxColumn("Responsável", options=["Engenharia", "Manutenção", "Operação", "HSE"]),
@@ -351,8 +346,7 @@ if selected_module == "Visão Executiva":
                 col_acao: st.column_config.TextColumn("Ação Recomendada", disabled=True, width="large"),
                 "Hierarquia NIOSH": st.column_config.TextColumn("Hierarquia (Auto)", disabled=True)
             }
-            if "Criticidade" in action_df_dash.columns:
-                col_config["Criticidade"] = st.column_config.TextColumn("Criticidade", disabled=True)
+            if "Criticidade" in action_df_dash.columns: col_config["Criticidade"] = st.column_config.TextColumn("Criticidade", disabled=True)
 
             edited_df = st.data_editor(action_df_dash, width="stretch", hide_index=True, column_config=col_config)
             
@@ -360,14 +354,11 @@ if selected_module == "Visão Executiva":
             total = len(edited_df)
             st.progress(fechadas / total if total > 0 else 0.0, text=f"Progresso: {fechadas}/{total} ações concluídas")
             
-            # 4. GERADOR DE WORKFLOW / BRIEFING
             st.markdown("<br>", unsafe_allow_html=True)
             btn_col1, btn_col2 = st.columns(2)
-            with btn_col1:
-                st.download_button("📥 Baixar Planilha para SAP (CSV)", edited_df.to_csv(index=False).encode('utf-8'), "action_plan.csv", "text/csv", use_container_width=True)
+            with btn_col1: st.download_button("📥 Baixar Planilha para SAP (CSV)", edited_df.to_csv(index=False).encode('utf-8'), "action_plan.csv", "text/csv", use_container_width=True)
             with btn_col2:
-                # Monta o Briefing em TXT
-                briefing_text = f"ORDEM DE SERVIÇO - SEGURANÇA DE PROCESSOS\nAtivo: {profile.identity.get('name')}\nTopologia: {st.session_state.current_node_name}\n" + "="*50 + "\n\n"
+                briefing_text = f"ORDEM DE SERVIÇO\nAtivo: {profile.identity.get('name')}\nTopologia: {st.session_state.current_node_name}\n" + "="*50 + "\n\n"
                 for resp in edited_df[edited_df["Status"] != "Fechado"]["Responsável"].unique():
                     briefing_text += f"[EQUIPE: {resp.upper()}]\n"
                     acoes_resp = edited_df[(edited_df["Status"] != "Fechado") & (edited_df["Responsável"] == resp)]
@@ -384,10 +375,7 @@ if selected_module == "Visão Executiva":
         st.markdown("<div class='panel'><h3>Gerador de Relatório Executivo</h3></div>", unsafe_allow_html=True)
         report_case_name = st.text_input("Nome do Relatório", value=st.session_state.current_case_name or profile.identity.get("name", "Caso"))
         if st.button("Gerar Relatório Completo", type="primary"):
-            st.session_state.report_bundle = build_executive_bundle(
-                case_name=report_case_name, profile=profile,
-                context={"lopa_result": st.session_state.get("lopa_result")}
-            )
+            st.session_state.report_bundle = build_executive_bundle(case_name=report_case_name, profile=profile, context={"lopa_result": st.session_state.get("lopa_result")})
             st.success("Relatório Compilado!")
         if st.session_state.get("report_bundle"):
             st.download_button("📥 Baixar Documento (HTML)", st.session_state.report_bundle["html"], file_name=f"{report_case_name}.html")
@@ -415,8 +403,8 @@ if selected_module == "Visão Executiva":
 elif selected_module == "Engenharia":
     eng_tab = option_menu(
         menu_title=None,
-        options=["Termodinâmica", "Cinética Térmica", "Sizing API 520", "Banco de Casos"],
-        icons=["thermometer", "fire", "speedometer2", "archive"],
+        options=["Termodinâmica", "Cinética Térmica", "Sizing API 520"],
+        icons=["thermometer", "fire", "speedometer2"],
         default_index=0, orientation="horizontal", styles=MENU_STYLES
     )
     
@@ -463,15 +451,6 @@ elif selected_module == "Engenharia":
             mw = float(profile.identity.get("molecular_weight", 28.0) or 28.0)
             psv_res = size_psv_gas(W_kg_h=w_req, T_C=t_rel, P1_kPag=p_rel, Z=1.0, MW=mw)
             st.success(f"**Orifício Padrão API:** Letra {psv_res['api_letter']} ({psv_res['api_area_mm2']} mm²)")
-
-    elif eng_tab == "Banco de Casos":
-        st.markdown("<div class='panel'><h3>📚 Banco de Acidentes Curado</h3></div>", unsafe_allow_html=True)
-        relevant_cases = get_relevant_historical_cases(profile)
-        if relevant_cases:
-            for case in relevant_cases[:2]:
-                st.markdown(f"<div class='history-card'><b>{case['evento']} ({case['ano']})</b><br>Mecanismo: {case['mecanismo']}</div>", unsafe_allow_html=True)
-        else:
-            st.info("Nenhum evento correlato crítico encontrado.")
 
 # ==============================================================================
 # MÓDULO 3: ANÁLISE DE RISCO
@@ -610,7 +589,7 @@ elif selected_module == "Análise de Risco":
                 st.error(f"**{domino['status']}** | Carga Térmica: {domino['q_kW_m2']:.2f} kW/m²")
         
         with st.expander("🏭 Projeção 2D na Planta Baixa", expanded=False):
-            st.info("Upload de Layout 2D para Heatmaps avançados em desenvolvimento (Sprint 21).")
+            st.info("Upload de Layout 2D para Heatmaps avançados em desenvolvimento.")
 
 # ==============================================================================
 # MÓDULO 4: GESTÃO DE MUDANÇA
@@ -649,3 +628,78 @@ elif selected_module == "Mudanças":
         if st.button("Rodar Assinatura PSSR", type="primary"):
             st.session_state.pssr_result = evaluate_pssr(design_ok=d1, procedures_ok=d2, training_ok=True, relief_verified=d4, alarms_tested=d5, startup_authorized=True, pha_or_moc_ok=True, mi_ready=True, emergency_ready=True, scope_label="PSSR")
             st.success("Status Operacional Emitido.")
+
+# ==============================================================================
+# SPRINT 23: MÓDULO 5 - BASE DE CONHECIMENTO E NORMAS
+# ==============================================================================
+elif selected_module == "Base de Conhecimento":
+    kb_tab = option_menu(
+        menu_title=None,
+        options=["Normas e Referências", "Incidentes Históricos"],
+        icons=["journal-text", "clock-history"],
+        default_index=0, orientation="horizontal", styles=MENU_STYLES
+    )
+
+    if kb_tab == "Normas e Referências":
+        st.markdown("""
+        <div style='margin-bottom: 20px;'>
+            <h2 style='color: #f3f4f6; font-size: 1.8rem; font-weight: 700; margin-bottom: 5px;'>📖 Biblioteca de Normas e Referências</h2>
+            <p style='color: #9ca3af; font-size: 1rem;'>Consulte rapidamente as principais normas, códigos e diretrizes aplicáveis à engenharia de processos e segurança industrial.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        c_search, c_filter = st.columns([3, 1])
+        search_term = c_search.text_input("🔍 Buscar por código, título ou palavra-chave...", placeholder="Ex: API 520, OSHA...")
+        tag_filter = c_filter.selectbox("Filtrar por Entidade", ["Todos", "API", "OSHA", "IEC", "CCPS", "NFPA"])
+        
+        # Base de Dados Curada de Normas
+        normas = [
+            {"id": "API Standard 520", "tag": "API", "area": "Alívio de Pressão", "desc": "Sizing, Selection, and Installation of Pressure-Relieving Devices. Norma fundamental para o dimensionamento de válvulas de segurança."},
+            {"id": "API Standard 521", "tag": "API", "area": "Alívio de Pressão", "desc": "Pressure-relieving and Depressuring Systems. Guia para o projeto de sistemas de alívio de pressão, incluindo análise de causas de despressurização e tochas."},
+            {"id": "OSHA 1910.119", "tag": "OSHA", "area": "Gestão de Segurança", "desc": "Process Safety Management of Highly Hazardous Chemicals. Exigências regulatórias mandatárias para gerenciamento seguro de químicos perigosos."},
+            {"id": "IEC 61511", "tag": "IEC", "area": "Instrumentação", "desc": "Functional safety - Safety instrumented systems for the process industry sector. Metodologia para ciclo de vida de SIS e verificação SIL."},
+            {"id": "CCPS LOPA", "tag": "CCPS", "area": "Análise de Risco", "desc": "Layer of Protection Analysis: Simplified Process Risk Assessment. Diretrizes para análise semiquantitativa de camadas de proteção independente (IPL)."},
+            {"id": "NFPA 30", "tag": "NFPA", "area": "Prevenção a Incêndios", "desc": "Flammable and Combustible Liquids Code. Requisitos para armazenamento, manuseio e uso seguro de líquidos inflamáveis e combustíveis."}
+        ]
+        
+        # Filtro ativo
+        filtered_normas = [n for n in normas if (tag_filter == "Todos" or n["tag"] == tag_filter) and (search_term.lower() in n["id"].lower() or search_term.lower() in n["desc"].lower())]
+        
+        # Renderização em Grid (2 colunas) usando HTML e CSS
+        cols = st.columns(2)
+        for idx, norma in enumerate(filtered_normas):
+            with cols[idx % 2]:
+                st.markdown(f"""
+                <div class="doc-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="color: #9ca3af; font-size: 0.8rem; font-weight: 700;">{norma['tag']}</span>
+                        <span class="doc-tag">{norma['area']}</span>
+                    </div>
+                    <span class="doc-title">{norma['id']}</span>
+                    <p class="doc-desc">{norma['desc']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.write("") # Spacer
+
+    elif kb_tab == "Incidentes Históricos":
+        st.markdown("<div class='panel'><h3>📚 Banco de Incidentes e Lições Aprendidas</h3></div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #9ca3af; margin-bottom: 30px;'>Filtrando falhas históricas globais relacionadas à substância <b>{profile.identity.get('name')}</b>.</p>", unsafe_allow_html=True)
+        
+        relevant_cases = get_relevant_historical_cases(profile)
+        if relevant_cases:
+            timeline_html = "<div class='history-timeline'>"
+            for case in relevant_cases:
+                timeline_html += f"""
+                <div class='history-item'>
+                    <div style='color: #3b82f6; font-weight: 700; font-size: 1.1rem;'>{case['ano']}</div>
+                    <div style='font-size: 1.2rem; font-weight: 600; color: #f3f4f6; margin-top: 5px;'>{case['evento']}</div>
+                    <div style='background: rgba(30,41,59,0.5); padding: 15px; border-radius: 8px; margin-top: 10px; border-left: 3px solid #f59e0b;'>
+                        <strong style='color: #f59e0b; font-size: 0.85rem; text-transform: uppercase;'>Mecanismo de Falha</strong><br>
+                        <span style='color: #d1d5db; font-size: 0.95rem; line-height: 1.5;'>{case['mecanismo']}</span>
+                    </div>
+                </div>
+                """
+            timeline_html += "</div>"
+            st.markdown(timeline_html, unsafe_allow_html=True)
+        else:
+            st.info(f"Nenhum incidente catastrófico catalogado especificamente para {profile.identity.get('name')} na nossa base curada.")
