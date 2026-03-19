@@ -13,7 +13,6 @@ import pandas as pd
 import streamlit as st
 import graphviz
 import plotly.graph_objects as go
-from streamlit_option_menu import option_menu
 
 # Módulos Antigos e Ferramentas Visuais
 from bowtie_visual import build_bowtie_custom_figure
@@ -50,7 +49,9 @@ from psv_engine import size_psv_gas
 from ml_reliability_engine import calculate_dynamic_pfd
 from runaway_engine import calculate_tmr_adiabatic
 
-# CSS OTIMIZADO: Adicionado Flexbox aos cartões para alinhamento perfeito
+from streamlit_option_menu import option_menu
+
+# CSS: Interface Vale do Silício Premium
 APP_CSS = """
 <style>
 :root { --bg-color: #0b0f19; --card-bg: #151b28; --border-color: #2a3441; --text-main: #d1d5db; --accent-blue: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.15); }
@@ -61,12 +62,9 @@ APP_CSS = """
 .panel { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.8rem; margin-bottom: 1.2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.15); transition: border-color 0.3s ease; }
 .panel:hover { border-color: var(--accent-blue); box-shadow: 0 4px 20px var(--accent-glow); }
 .panel h3 { margin-top: 0; color: #f3f4f6; font-size: 1.15rem; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 20px; }
-
-/* OTIMIZAÇÃO DOS CARTÕES: Altura fixa e Flexbox para conteúdo ficar sempre centralizado */
 .metric-box { background: rgba(30, 41, 59, 0.5); border: 1px solid var(--border-color); border-radius: 10px; padding: 15px 20px; text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 125px; }
 .metric-label { color: #9ca3af; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 .metric-value { color: #f9fafb; font-size: 2rem; font-weight: 800; margin-top: 8px; font-variant-numeric: tabular-nums; line-height: 1.1; }
-
 .risk-blue { color: var(--accent-blue); } .risk-green { color: #10b981; } .risk-amber { color: #f59e0b; } .risk-red { color: #ef4444; }
 .note-card { background: rgba(59, 130, 246, 0.08); border-left: 4px solid var(--accent-blue); padding: 15px; border-radius: 6px; font-size: 0.9rem; margin-bottom: 20px; color: #bfdbfe; line-height: 1.5; }
 .history-card { background: rgba(22, 27, 34, 0.8); border-left: 4px solid #d29922; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
@@ -78,16 +76,14 @@ st.set_page_config(page_title="ChemSafe Pro Enterprise", page_icon="⚗️", lay
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# FUNÇÕES PLOTLY EMBUTIDAS E OTIMIZADAS
+# FUNÇÕES PLOTLY EMBUTIDAS
 # ==============================================================================
 def render_modern_gauge(score, band):
-    """ OTIMIZADO: Agora o Status aparece gigante dentro do gráfico, eliminando a redundância do card de cima. """
     color = "#10b981" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=score,
         number={'suffix': "%", 'font': {'color': "white", 'size': 45}},
-        # Status "Band" em destaque no título do Gauge
         title={'text': f"Status Atual:<br><span style='font-size:1.4em; color:{color}; font-weight:800;'>{band}</span>", 'font': {'color': "#9ca3af", 'size': 14}},
         gauge={
             'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#30363d"},
@@ -121,7 +117,6 @@ def render_modern_radar(cri_data):
     )
     return fig
 
-# ESTILO DOS MENUS HORIZONTAIS
 MENU_STYLES = {
     "container": {"padding": "5px", "background-color": "#151b28", "border": "1px solid #2a3441", "border-radius": "10px", "margin-bottom": "20px"},
     "icon": {"color": "#9ca3af", "font-size": "16px"},
@@ -223,7 +218,7 @@ action_df_dash = build_consolidated_action_plan(
 )
 
 # ==============================================================================
-# MÓDULO 1: VISÃO EXECUTIVA
+# MÓDULO 1: VISÃO EXECUTIVA (COM NOVO ACTION PLAN INTERATIVO)
 # ==============================================================================
 if selected_module == "Visão Executiva":
     exec_tab = option_menu(
@@ -235,13 +230,10 @@ if selected_module == "Visão Executiva":
 
     if exec_tab == "Dashboard Global":
         st.markdown("<div class='panel'><h3>KPIs Executivos</h3></div>", unsafe_allow_html=True)
-        
-        # OTIMIZAÇÃO: Reduzido de 4 para 3 colunas para eliminar a redundância visual. O Status agora vive no Gauge.
         c1, c2, c3 = st.columns(3)
         c1.markdown(metric_card("Maturidade Global", f"{cri_data['index']}%", cri_data['color_class']), unsafe_allow_html=True)
         c2.markdown(metric_card("Ações Pendentes", str(len(action_df_dash)), "risk-amber" if len(action_df_dash) > 0 else "risk-green"), unsafe_allow_html=True)
-        
-        gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])])
+        gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])]) if not action_df_dash.empty else 0
         c3.markdown(metric_card("Gaps Críticos", str(gaps_criticos), "risk-red" if gaps_criticos > 0 else "risk-green"), unsafe_allow_html=True)
         
         left, right = st.columns(2)
@@ -253,8 +245,49 @@ if selected_module == "Visão Executiva":
             st.plotly_chart(render_modern_radar(cri_data), use_container_width=True, theme=None, config={'displayModeBar': False})
 
     elif exec_tab == "Action Plan":
-        st.markdown("<div class='panel'><h3>Hub de Ações Consolidadas (Action Plan)</h3></div>", unsafe_allow_html=True)
-        st.dataframe(action_df_dash, use_container_width=True, hide_index=True)
+        st.markdown("<div class='panel'><h3>Hub de Ações Interativo (Em Atendimento à OSHA 1910.119 e CCPS)</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='note-card'><b>Governança de Risco:</b> Acompanhe, delegue e feche as recomendações extraídas de HAZOP, LOPA e MOC garantindo a Hierarquia de Controles do NIOSH.</div>", unsafe_allow_html=True)
+        
+        if not action_df_dash.empty:
+            # INJEÇÃO DAS COLUNAS DE AUDITORIA (Se não existirem)
+            if "Status" not in action_df_dash.columns: action_df_dash["Status"] = "Aberto"
+            action_df_dash["Responsável"] = "Engenharia"
+            action_df_dash["Prazo"] = "30 Dias"
+            
+            # Lógica simples de AI Classifier para Hierarquia de Controle
+            def classify_hierarchy(action_text):
+                text = str(action_text).lower()
+                if "instalar" in text or "válvula" in text or "psv" in text or "sis" in text: return "Engenharia (Hardware)"
+                elif "revisar" in text or "treinar" in text or "procedimento" in text: return "Administrativo"
+                return "Mitigação"
+                
+            action_df_dash["Hierarquia NIOSH"] = action_df_dash["Ação Recomendada"].apply(classify_hierarchy)
+
+            # DATA EDITOR: Permite edição direto na tela (Silicon Valley Style)
+            edited_df = st.data_editor(
+                action_df_dash,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Status": st.column_config.SelectboxColumn("Status", options=["Aberto", "Em Andamento", "Aguardando Verba", "Fechado"], required=True),
+                    "Responsável": st.column_config.SelectboxColumn("Responsável", options=["Engenharia", "Manutenção", "Operação", "HSE"]),
+                    "Criticidade": st.column_config.TextColumn("Criticidade", disabled=True),
+                    "Ação Recomendada": st.column_config.TextColumn("Ação Recomendada", disabled=True, width="large"),
+                    "Hierarquia NIOSH": st.column_config.TextColumn("Hierarquia (Auto)", disabled=True)
+                }
+            )
+            
+            # KPI Dinâmico de Fechamento
+            fechadas = len(edited_df[edited_df["Status"] == "Fechado"])
+            total = len(edited_df)
+            progresso = fechadas / total if total > 0 else 0.0
+            st.markdown(f"**Progresso de Resolução de Ações: {fechadas}/{total}**")
+            st.progress(progresso)
+            
+            # Exportar plano atualizado para o CMMS/SAP
+            st.download_button("📥 Exportar Plano de Ação para SAP/Maximo (CSV)", edited_df.to_csv(index=False).encode('utf-8'), "action_plan.csv", "text/csv")
+        else:
+            st.info("Nenhuma ação de segurança pendente no momento. A planta está de acordo com as especificações base.")
 
     elif exec_tab == "Relatório Automático":
         st.markdown("<div class='panel'><h3>Gerador de Relatório Executivo</h3></div>", unsafe_allow_html=True)
@@ -400,7 +433,6 @@ elif selected_module == "Análise de Risco":
             df_hazop = pd.DataFrame(st.session_state.pid_hazop_matrix)
             
             with st.expander("📋 Estudo HAZOP (IEC 61882)", expanded=True):
-                # O ALTERNADOR DE VISUALIZAÇÃO ENTRE CARDS E TABELA
                 view_mode = st.radio("Modo de Leitura:", ["🗂️ Cards (Discussão de Reunião)", "📊 Tabela Otimizada (Text Wrap)"], horizontal=True, label_visibility="collapsed")
                 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -445,12 +477,11 @@ elif selected_module == "Análise de Risco":
 
     elif risk_tab == "ML-LOPA & Humanos":
         st.markdown("<div class='panel'><h3>🛡️ Confiabilidade Dinâmica e Erro Humano</h3></div>", unsafe_allow_html=True)
-        
         c_ml, c_hra, c_lopa = st.columns([1, 1, 1.2])
         
         with c_ml:
             st.markdown("#### 🤖 ML/OREDA Wear-Out")
-            eq_type = st.selectbox("Equipamento", ["Bomba de Resfriamento", "Válvula de Bloqueio"])
+            eq_type = st.selectbox("Equipamento Analisado", ["Bomba de Resfriamento", "Válvula de Bloqueio"])
             t_meses = st.slider("Meses de Uso", 1, 60, 24)
             anomaly = st.slider("Anomalia Preditiva", 0.0, 1.0, 0.2)
             dyn_res = calculate_dynamic_pfd(1e-2 if "Bomba" in eq_type else 1e-3, t_meses, anomaly, eq_type)
@@ -487,7 +518,7 @@ elif selected_module == "Análise de Risco":
                 domino = calculate_domino_effect(dist, m_rate, hc * 1e6)
                 st.error(f"**{domino['status']}** | Carga Térmica: {domino['q_kW_m2']:.2f} kW/m²")
         
-        with st.expander("🏭 Projeção 2D na Planta Baixa (Plotly Heatmap)", expanded=False):
+        with st.expander("🏭 Projeção 2D na Planta Baixa (Plotly)", expanded=False):
             layout_file = st.file_uploader("Upload da Planta (PNG/JPG)", type=["png", "jpg", "jpeg"])
             lc1, lc2, lc3 = st.columns(3)
             with lc1: scale_m = st.number_input("Escala: Metros por Pixel?", value=0.1, format="%.3f")
@@ -495,8 +526,16 @@ elif selected_module == "Análise de Risco":
             with lc3: oy = st.number_input("Origem (Pixel Y)", value=500)
             
             if layout_file and st.button("Gerar Heatmap na Planta", type="primary"):
-                # TODO: O módulo build_plant_layout_heatmap é importado do plotly_visuals.py
-                pass
+                try:
+                    zonas_exemplo = [
+                        {"radius_m": 15.0, "color": "darkred", "label": "Letal / Ruptura"},
+                        {"radius_m": 30.0, "color": "orange", "label": "Perda de Controle"},
+                        {"radius_m": 60.0, "color": "yellow", "label": "Zona de Restrição"}
+                    ]
+                    fig_layout = build_plant_layout_heatmap(layout_file, scale_m, int(ox), int(oy), zonas_exemplo)
+                    st.plotly_chart(fig_layout, use_container_width=True, theme=None)
+                except Exception as e:
+                    st.error(f"Erro ao processar o Layout 2D. Tente um formato de imagem menor.")
 
 # ==============================================================================
 # MÓDULO 4: GESTÃO DE MUDANÇA
