@@ -1,4 +1,3 @@
-pip install plotly
 # plotly_visuals.py
 from __future__ import annotations
 import plotly.graph_objects as go
