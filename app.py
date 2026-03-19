@@ -45,9 +45,10 @@ from area_engine import evaluate_area_risk
 from scenario_library import get_typical_scenarios
 from regulatory_engine import check_regulatory_framework, generate_facilitator_questions
 
-# MÓDULOS SPRINT 15 e 16
+# MÓDULOS SPRINT 15, 16 e 17
 from map_visuals import render_map_in_streamlit
 from historical_engine import get_relevant_historical_cases
+from pid_engine import EQUIPMENT_PARAMETERS, generate_hazop_from_topology
 
 APP_CSS = """
 <style>
@@ -92,6 +93,7 @@ if "pssr_result" not in st.session_state: st.session_state.pssr_result = None
 if "reactivity_partner_profile" not in st.session_state: st.session_state.reactivity_partner_profile = None
 if "reactivity_result" not in st.session_state: st.session_state.reactivity_result = None
 if "report_bundle" not in st.session_state: st.session_state.report_bundle = None
+if "pid_hazop_matrix" not in st.session_state: st.session_state.pid_hazop_matrix = []
 
 def metric_card(label: str, value: str, klass: str = "risk-blue") -> str:
     return f"<div class='metric-box'><div class='metric-label'>{label}</div><div class='metric-value {klass}'>{value}</div></div>"
@@ -282,7 +284,6 @@ if selected_module == t("module_exec", lang):
 # MÓDULO 2: ENGENHARIA DE DADOS
 # ==============================================================================
 elif selected_module == t("module_eng", lang):
-    # SPRINT 16: Adicionada a aba "Lições Históricas"
     tabs = st.tabs(["Overview", t("tab_compound", lang), "Comparador", "Reatividade (Lab)", "Fontes / Evidências", "📚 Lições Históricas"])
     overview_tab, compound_tab, compare_tab, reactivity_tab, sources_tab, history_tab = tabs
 
@@ -362,10 +363,9 @@ elif selected_module == t("module_eng", lang):
         st.markdown("<div class='panel'><h3>Governança de Fontes (Ledger)</h3></div>", unsafe_allow_html=True)
         st.dataframe(build_evidence_ledger_df(profile), width="stretch", hide_index=True)
 
-    # NOVO: SPRINT 16
     with history_tab:
         st.markdown("<div class='panel'><h3>📚 Lições Históricas de Engenharia</h3></div>", unsafe_allow_html=True)
-        st.markdown("<div class='note-card'>Base curada de acidentes da indústria química (CSB, HSE, etc.) selecionados automaticamente pelos perigos e propriedades físicas do composto atual.</div><br>", unsafe_allow_html=True)
+        st.markdown("<div class='note-card'>Base curada de acidentes da indústria química selecionados automaticamente pelos perigos e propriedades físicas do composto atual.</div><br>", unsafe_allow_html=True)
         
         relevant_cases = get_relevant_historical_cases(profile)
         
@@ -387,7 +387,7 @@ elif selected_module == t("module_eng", lang):
                     st.warning("**Barreiras que Falharam:**")
                     for b in case["barreiras_falharam"]: st.markdown(f"- {b}")
                 
-                st.success("**Lições Aprendidas (Inputs para seu MOC / HAZOP):**")
+                st.success("**Lições Aprendidas:**")
                 for l in case["licoes_aprendidas"]: st.markdown(f"- {l}")
                 
                 st.markdown("</div><hr>", unsafe_allow_html=True)
@@ -396,8 +396,24 @@ elif selected_module == t("module_eng", lang):
 # MÓDULO 3: ANÁLISE DE RISCO
 # ==============================================================================
 elif selected_module == t("module_risk", lang):
-    tabs = st.tabs(["Segregação de Área", "HAZOP", "Bow-Tie", "LOPA", t("tab_whatif", lang), "Consequências"])
-    area_tab, hazop_tab, bowtie_tab, lopa_tab, whatif_tab, cons_tab = tabs
+    # SPRINT 17: Adicionado o "Construtor P&ID" como a primeira aba do fluxo de risco
+    tabs = st.tabs(["🏗️ Construtor P&ID", "Segregação de Área", "HAZOP (Matriz)", "Bow-Tie", "LOPA", t("tab_whatif", lang), "Consequências"])
+    pid_tab, area_tab, hazop_tab, bowtie_tab, lopa_tab, whatif_tab, cons_tab = tabs
+
+    with pid_tab:
+        st.markdown("<div class='panel'><h3>Construtor de Topologia (P&ID Node Builder)</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='note-card'>Selecione os equipamentos presentes no Nó do P&ID. O motor irá cruzar a topologia com o perfil termodinâmico do composto e preencher o HAZOP automaticamente.</div><br>", unsafe_allow_html=True)
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            node_name = st.text_input("Nome/TAG do Nó", value="Nó 1: Linha de Recalque", help="Ex: Linha do Tanque TK-100 para Bomba P-101")
+        with col2:
+            equipment_options = list(EQUIPMENT_PARAMETERS.keys())
+            selected_equipment = st.multiselect("Equipamentos e Linhas neste Nó", options=equipment_options, default=["Tanque de Armazenamento", "Tubulação / Linha de Transferência", "Bomba Centrífuga"])
+            
+        if st.button("🚀 Gerar Cenários HAZOP via Topologia", type="primary"):
+            st.session_state.pid_hazop_matrix = generate_hazop_from_topology(node_name, selected_equipment, profile)
+            st.success(f"Matriz HAZOP gerada com sucesso! Foram mapeados {len(st.session_state.pid_hazop_matrix)} cenários com base na física do composto. Vá para a aba 'HAZOP (Matriz)'.")
 
     with area_tab:
         st.markdown("<div class='panel'><h3>Segregação por Área de Risco</h3></div>", unsafe_allow_html=True)
@@ -420,19 +436,15 @@ elif selected_module == t("module_risk", lang):
                 st.write(f"❓ {q}")
             st.markdown("<hr>", unsafe_allow_html=True)
 
-        st.markdown("<div class='panel'><h3>📚 Biblioteca Universal de Cenários (Sprint 13)</h3></div>", unsafe_allow_html=True)
-        typical_scenarios = get_typical_scenarios(profile)
-        if not typical_scenarios:
-            st.info("Sem cenários críticos atrelados à física deste composto.")
+        # Matriz Gerada pelo Construtor P&ID
+        if st.session_state.get("pid_hazop_matrix"):
+            st.markdown("<div class='panel'><h3>Matriz HAZOP (Gerada da Topologia P&ID)</h3></div>", unsafe_allow_html=True)
+            df_hazop_auto = pd.DataFrame(st.session_state.pid_hazop_matrix)
+            st.dataframe(df_hazop_auto, width="stretch", hide_index=True)
         else:
-            for cenario in typical_scenarios:
-                with st.expander(cenario["titulo"]):
-                    st.write(f"**Desvio:** {cenario['desvio']}")
-                    st.write(f"**Causa:** {cenario['causa']}")
-                    st.error(f"**Consequência:** {cenario['consequencia']}")
-                    st.success(f"**Salvaguardas:** {cenario['salvaguardas']}")
+            st.info("💡 Vá na aba '🏗️ Construtor P&ID' para gerar uma matriz inteligente baseada na planta, ou use a Worksheet Base abaixo.")
 
-        st.markdown("<br><div class='panel'><h3>Worksheet HAZOP Base</h3></div>", unsafe_allow_html=True)
+        st.markdown("<br><div class='panel'><h3>Worksheet HAZOP Base (Manual)</h3></div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1: param = st.selectbox("Parâmetro", list(HAZOP_DB.keys()))
         with c2: guideword = st.selectbox("Palavra-guia", ["MAIS", "MENOS", "NÃO / NENHUM"])
