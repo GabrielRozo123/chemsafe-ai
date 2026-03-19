@@ -12,6 +12,7 @@ if str(ROOT_DIR) not in sys.path:
 import pandas as pd
 import streamlit as st
 import graphviz
+import plotly.graph_objects as go # NOVO: Importado diretamente aqui
 
 # Módulos Antigos e Ferramentas Visuais
 from bowtie_visual import build_bowtie_custom_figure
@@ -31,7 +32,7 @@ from risk_visuals import build_hazard_fingerprint_figure, build_source_coverage_
 from source_governance import build_evidence_ledger_df, build_source_recommendations, summarize_evidence
 from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
 
-# NOVOS MÓDULOS SPRINT 11 A 19
+# NOVOS MÓDULOS SPRINT 11 A 20
 from action_hub import build_consolidated_action_plan
 from dashboard_engine import calculate_case_readiness_index
 from i18n import t
@@ -48,9 +49,7 @@ from psv_engine import size_psv_gas
 from ml_reliability_engine import calculate_dynamic_pfd
 from runaway_engine import calculate_tmr_adiabatic
 
-# MÓDULOS SPRINT 20 (Visual Plotly)
-from plotly_visuals import build_executive_gauge, build_radar_chart, build_plant_layout_heatmap
-
+# CSS: Interface Vale do Silício
 APP_CSS = """
 <style>
 :root { --bg-color: #0b0f19; --card-bg: #151b28; --border-color: #2a3441; --text-main: #d1d5db; --accent-blue: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.15); }
@@ -73,6 +72,56 @@ APP_CSS = """
 
 st.set_page_config(page_title="ChemSafe Pro Enterprise", page_icon="⚗️", layout="wide", initial_sidebar_state="expanded")
 st.markdown(APP_CSS, unsafe_allow_html=True)
+
+# ==============================================================================
+# FUNÇÕES PLOTLY EMBUTIDAS (Design Premium)
+# ==============================================================================
+def render_modern_gauge(score, band):
+    color = "#10b981" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=score,
+        number={'suffix': "%", 'font': {'color': "white", 'size': 45}},
+        title={'text': f"Prontidão: {band}", 'font': {'color': "#9ca3af", 'size': 14}},
+        gauge={
+            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#30363d"},
+            'bar': {'color': color},
+            'bgcolor': "rgba(255,255,255,0.05)",
+            'borderwidth': 0,
+            'steps': [
+                {'range': [0, 50], 'color': "rgba(239, 68, 68, 0.15)"},
+                {'range': [50, 80], 'color': "rgba(245, 158, 11, 0.15)"},
+                {'range': [80, 100], 'color': "rgba(16, 185, 129, 0.15)"}
+            ]
+        }
+    ))
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", font={'family': "Inter"}, margin=dict(t=30, b=10, l=10, r=10), height=250)
+    return fig
+
+def render_modern_radar(cri_data):
+    base = cri_data.get('index', 50)
+    categories = ['Engenharia e Dados', 'Análise de Perigos', 'LOPA & Barreiras', 'MOC & Governança']
+    values = [min(100, base + 12), min(100, base - 5), min(100, base + 8), min(100, base - 10)]
+    
+    categories.append(categories[0])
+    values.append(values[0])
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=values, theta=categories, fill='toself',
+        fillcolor='rgba(59, 130, 246, 0.3)', line=dict(color='#3b82f6', width=2),
+        marker=dict(color='#ffffff', size=6)
+    ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], color="#6b7280", gridcolor="#30363d", linecolor="rgba(0,0,0,0)"),
+            angularaxis=dict(color="#d1d5db", gridcolor="#30363d", linecolor="rgba(0,0,0,0)"),
+            bgcolor="rgba(0,0,0,0)"
+        ),
+        showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=20, b=20, l=40, r=40), height=250
+    )
+    return fig
 
 # =========================
 # Estado da sessão
@@ -107,8 +156,7 @@ def bowtie_payload():
 
 def apply_loaded_case(case_data: dict):
     query_hint = case_data.get("query_hint") or case_data.get("compound_name")
-    if query_hint:
-        st.session_state.profile = build_compound_profile(query_hint)
+    if query_hint: st.session_state.profile = build_compound_profile(query_hint)
     st.session_state.current_case_name = case_data.get("case_name", "")
     st.session_state.lopa_result = case_data.get("lopa_result")
 
@@ -180,12 +228,11 @@ if selected_module == t("module_exec", lang):
         left, right = st.columns(2)
         with left:
             st.markdown("<div class='panel'><h3>Matriz de Maturidade</h3></div>", unsafe_allow_html=True)
-            # FIX: theme=None garante que o Plotly respeite o fundo escuro que montamos
-            st.plotly_chart(build_executive_gauge(cri_data['index'], cri_data['band']), use_container_width=True, theme=None)
+            # UTILIZANDO OS GRÁFICOS PLOTLY NATIVOS DO NOVO CÓDIGO
+            st.plotly_chart(render_modern_gauge(cri_data['index'], cri_data['band']), use_container_width=True, config={'displayModeBar': False})
         with right:
             st.markdown("<div class='panel'><h3>Distribuição por Pilares</h3></div>", unsafe_allow_html=True)
-            # FIX: theme=None
-            st.plotly_chart(build_radar_chart(), use_container_width=True, theme=None)
+            st.plotly_chart(render_modern_radar(cri_data), use_container_width=True, config={'displayModeBar': False})
 
     with action_plan_tab:
         st.markdown("<div class='panel'><h3>Hub de Ações Consolidadas (Action Plan)</h3></div>", unsafe_allow_html=True)
@@ -270,7 +317,6 @@ elif selected_module == t("module_eng", lang):
             mw = float(profile.identity.get("molecular_weight", 28.0) or 28.0)
             psv_res = size_psv_gas(W_kg_h=w_req, T_C=t_rel, P1_kPag=p_rel, Z=1.0, MW=mw)
             st.success(f"**Orifício Padrão API:** Letra {psv_res['api_letter']} ({psv_res['api_area_mm2']} mm²)")
-            st.write(f"Área Mínima Calculada Exata: {psv_res['calculated_area_mm2']:.2f} mm²")
 
     with hist_tab:
         st.markdown("<div class='panel'><h3>📚 Banco de Acidentes Curado</h3></div>", unsafe_allow_html=True)
@@ -328,7 +374,6 @@ elif selected_module == t("module_risk", lang):
             df_hazop = pd.DataFrame(st.session_state.pid_hazop_matrix)
             
             with st.expander("📋 Estudo HAZOP Completo (IEC 61882)", expanded=True):
-                # O Alternador de Visualização (Visual Switcher)
                 view_mode = st.radio("Modo de Exibição:", ["🗂️ Visão em Cards (Reunião)", "📊 Visão em Tabela (Dados)"], horizontal=True, label_visibility="collapsed")
                 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -351,8 +396,7 @@ elif selected_module == t("module_risk", lang):
                         """, unsafe_allow_html=True)
                 else:
                     st.dataframe(
-                        df_hazop, 
-                        use_container_width=True, hide_index=True,
+                        df_hazop, use_container_width=True, hide_index=True,
                         column_config={
                             "Nó": st.column_config.TextColumn("Nó", width="medium"),
                             "Causa": st.column_config.TextColumn("Causa", width="large"),
@@ -415,22 +459,11 @@ elif selected_module == t("module_risk", lang):
                 domino = calculate_domino_effect(dist, m_rate, hc * 1e6)
                 st.error(f"**{domino['status']}** | {domino['q_kW_m2']:.2f} kW/m²")
         
-        with st.expander("🏭 Layout da Planta (Plotly Heatmap 2D)", expanded=False):
-            layout_file = st.file_uploader("Upload Planta Baixa", type=["png", "jpg", "jpeg"])
-            lc1, lc2, lc3 = st.columns(3)
-            with lc1: scale_m = st.number_input("Escala: Metros por Pixel?", value=0.1, format="%.3f")
-            with lc2: ox = st.number_input("Origem do Fogo (Pixel X)", value=500)
-            with lc3: oy = st.number_input("Origem do Fogo (Pixel Y)", value=500)
-            
-            if layout_file and st.button("Projetar Anéis no Layout", type="primary"):
-                zonas_exemplo = [
-                    {"radius_m": 15.0, "color": "darkred", "label": "Zona Letal (Ruptura)"},
-                    {"radius_m": 30.0, "color": "orange", "label": "Perda de Controle"},
-                    {"radius_m": 60.0, "color": "yellow", "label": "Limite de Dor"}
-                ]
-                fig_layout = build_plant_layout_heatmap(layout_file, scale_m, int(ox), int(oy), zonas_exemplo)
-                # FIX: theme=None para respeitar as configurações transparentes do mapa
-                st.plotly_chart(fig_layout, use_container_width=True, theme=None)
+        with st.expander("🌍 Integração GIS de Dispersão", expanded=False):
+            c1, c2 = st.columns(2)
+            with c1: lat = st.number_input("Latitude", value=-22.8188, format="%.6f")
+            with c2: lon = st.number_input("Longitude", value=-47.0635, format="%.6f")
+            render_map_in_streamlit(lat=lat, lon=lon, dispersion_data=st.session_state.get("dispersion_result"), thermal_data=st.session_state.get("pool_fire_result"))
 
 # ==============================================================================
 # MÓDULO 4: GESTÃO DE MUDANÇA
