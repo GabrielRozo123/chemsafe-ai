@@ -1271,53 +1271,65 @@ def render_evidence_panel(
     formula: str | None = None,
     note: str | None = None,
 ):
-    refs_html = _html_list(references)
-    assumptions_html = _html_list(assumptions)
-    inputs_html = _html_inputs(inputs)
+    references = references or []
+    assumptions = assumptions or []
+    inputs = inputs or {}
     formula_html = normalize_whitespace(formula) if formula else "—"
     note_html = normalize_whitespace(note) if note else "Sem observações adicionais."
 
-    html = f"""
-<div class="evidence-panel">
-    <div class="evidence-kicker">Painel de Evidências por Cálculo</div>
-    <div class="evidence-title">{title}</div>
-    <div class="evidence-sub">{purpose}</div>
-
-    <div class="evidence-grid">
-        <div class="evidence-card">
-            <h4>Método e Referências</h4>
-            <ul>
-                <li><strong>Método:</strong> {normalize_whitespace(method)}</li>
-                {refs_html}
-            </ul>
+    st.markdown(
+        """
+        <div class="evidence-panel">
+            <div class="evidence-kicker">Painel de Evidências por Cálculo</div>
         </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        <div class="evidence-card">
-            <h4>Entradas Relevantes</h4>
-            <div class="evidence-inputs">{inputs_html}</div>
-        </div>
+    with st.container(border=True):
+        st.markdown(f"### {title}")
+        st.caption(purpose)
 
-        <div class="evidence-card">
-            <h4>Hipóteses / Limites</h4>
-            <ul>
-                {assumptions_html}
-            </ul>
-        </div>
+        c1, c2 = st.columns(2)
 
-        <div class="evidence-card">
-            <h4>Expressão / Lógica</h4>
-            <div class="evidence-code">{formula_html}</div>
-        </div>
-    </div>
+        with c1:
+            with st.container(border=True):
+                st.markdown("#### Método e Referências")
+                st.markdown(f"- **Método:** {normalize_whitespace(method)}")
+                if references:
+                    for ref in references:
+                        st.markdown(f"- {normalize_whitespace(ref)}")
+                else:
+                    st.markdown("- —")
 
-    <div class="evidence-card" style="margin-top:14px;">
-        <h4>Observação de Aplicabilidade</h4>
-        <ul><li>{note_html}</li></ul>
-    </div>
-</div>
-"""
-    st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
+            with st.container(border=True):
+                st.markdown("#### Hipóteses / Limites")
+                if assumptions:
+                    for item in assumptions:
+                        st.markdown(f"- {normalize_whitespace(item)}")
+                else:
+                    st.markdown("- —")
 
+        with c2:
+            with st.container(border=True):
+                st.markdown("#### Entradas Relevantes")
+                if inputs:
+                    input_cols = st.columns(2)
+                    items = list(inputs.items())
+                    for idx, (k, v) in enumerate(items):
+                        with input_cols[idx % 2]:
+                            st.caption(normalize_whitespace(str(k)))
+                            st.markdown(f"**{normalize_whitespace(str(v))}**")
+                else:
+                    st.markdown("—")
+
+            with st.container(border=True):
+                st.markdown("#### Expressão / Lógica")
+                st.code(formula_html, language="text")
+
+        with st.container(border=True):
+            st.markdown("#### Observação de Aplicabilidade")
+            st.markdown(f"- {note_html}")
 
 MENU_STYLES = {
     "container": {
