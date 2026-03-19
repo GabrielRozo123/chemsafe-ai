@@ -207,6 +207,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# Dashboards Globais e Blindagem de Dados
 psi_df_dash = build_psi_readiness_df(profile, st.session_state.get("lopa_result"), bowtie_payload())
 cri_data = calculate_case_readiness_index(
     profile, summarize_psi_readiness(psi_df_dash),
@@ -217,8 +218,13 @@ action_df_dash = build_consolidated_action_plan(
     profile, psi_df_dash, st.session_state.get("moc_result"), st.session_state.get("pssr_result"), st.session_state.get("reactivity_result")
 )
 
+# BLINDAGEM CONTRA O ERRO DE DATAFRAME
+has_actions = isinstance(action_df_dash, pd.DataFrame) and not action_df_dash.empty
+num_acoes_pendentes = len(action_df_dash) if has_actions else 0
+gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])]) if has_actions else 0
+
 # ==============================================================================
-# MÓDULO 1: VISÃO EXECUTIVA (COM NOVO ACTION PLAN INTERATIVO)
+# MÓDULO 1: VISÃO EXECUTIVA 
 # ==============================================================================
 if selected_module == "Visão Executiva":
     exec_tab = option_menu(
@@ -232,8 +238,7 @@ if selected_module == "Visão Executiva":
         st.markdown("<div class='panel'><h3>KPIs Executivos</h3></div>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         c1.markdown(metric_card("Maturidade Global", f"{cri_data['index']}%", cri_data['color_class']), unsafe_allow_html=True)
-        c2.markdown(metric_card("Ações Pendentes", str(len(action_df_dash)), "risk-amber" if len(action_df_dash) > 0 else "risk-green"), unsafe_allow_html=True)
-        gaps_criticos = len(action_df_dash[action_df_dash["Criticidade"].isin(["Alta", "Crítica"])]) if not action_df_dash.empty else 0
+        c2.markdown(metric_card("Ações Pendentes", str(num_acoes_pendentes), "risk-amber" if num_acoes_pendentes > 0 else "risk-green"), unsafe_allow_html=True)
         c3.markdown(metric_card("Gaps Críticos", str(gaps_criticos), "risk-red" if gaps_criticos > 0 else "risk-green"), unsafe_allow_html=True)
         
         left, right = st.columns(2)
@@ -245,25 +250,26 @@ if selected_module == "Visão Executiva":
             st.plotly_chart(render_modern_radar(cri_data), use_container_width=True, theme=None, config={'displayModeBar': False})
 
     elif exec_tab == "Action Plan":
-        st.markdown("<div class='panel'><h3>Hub de Ações Interativo (Em Atendimento à OSHA 1910.119 e CCPS)</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='panel'><h3>Hub de Ações Interativo (OSHA 1910.119 e CCPS)</h3></div>", unsafe_allow_html=True)
         st.markdown("<div class='note-card'><b>Governança de Risco:</b> Acompanhe, delegue e feche as recomendações extraídas de HAZOP, LOPA e MOC garantindo a Hierarquia de Controles do NIOSH.</div>", unsafe_allow_html=True)
         
-        if not action_df_dash.empty:
-            # INJEÇÃO DAS COLUNAS DE AUDITORIA (Se não existirem)
+        if has_actions:
+            # Prevenção e Injeção das colunas faltantes
             if "Status" not in action_df_dash.columns: action_df_dash["Status"] = "Aberto"
-            action_df_dash["Responsável"] = "Engenharia"
-            action_df_dash["Prazo"] = "30 Dias"
+            if "Responsável" not in action_df_dash.columns: action_df_dash["Responsável"] = "Engenharia"
+            if "Prazo" not in action_df_dash.columns: action_df_dash["Prazo"] = "30 Dias"
             
-            # Lógica simples de AI Classifier para Hierarquia de Controle
+            # AI Classifier Simples para Hierarquia de Controles
             def classify_hierarchy(action_text):
                 text = str(action_text).lower()
-                if "instalar" in text or "válvula" in text or "psv" in text or "sis" in text: return "Engenharia (Hardware)"
-                elif "revisar" in text or "treinar" in text or "procedimento" in text: return "Administrativo"
+                if any(word in text for word in ["instalar", "válvula", "psv", "sis", "alarme", "bomba", "trocar"]): return "Engenharia (Hardware)"
+                elif any(word in text for word in ["revisar", "treinar", "procedimento", "atualizar"]): return "Administrativo"
                 return "Mitigação"
                 
-            action_df_dash["Hierarquia NIOSH"] = action_df_dash["Ação Recomendada"].apply(classify_hierarchy)
+            if "Hierarquia NIOSH" not in action_df_dash.columns:
+                action_df_dash["Hierarquia NIOSH"] = action_df_dash["Ação Recomendada"].apply(classify_hierarchy)
 
-            # DATA EDITOR: Permite edição direto na tela (Silicon Valley Style)
+            # Data Editor Seguro
             edited_df = st.data_editor(
                 action_df_dash,
                 use_container_width=True,
@@ -277,17 +283,14 @@ if selected_module == "Visão Executiva":
                 }
             )
             
-            # KPI Dinâmico de Fechamento
             fechadas = len(edited_df[edited_df["Status"] == "Fechado"])
             total = len(edited_df)
             progresso = fechadas / total if total > 0 else 0.0
-            st.markdown(f"**Progresso de Resolução de Ações: {fechadas}/{total}**")
+            st.markdown(f"**Progresso de Resolução: {fechadas}/{total}**")
             st.progress(progresso)
-            
-            # Exportar plano atualizado para o CMMS/SAP
-            st.download_button("📥 Exportar Plano de Ação para SAP/Maximo (CSV)", edited_df.to_csv(index=False).encode('utf-8'), "action_plan.csv", "text/csv")
+            st.download_button("📥 Exportar Plano de Ação para SAP (CSV)", edited_df.to_csv(index=False).encode('utf-8'), "action_plan.csv", "text/csv")
         else:
-            st.info("Nenhuma ação de segurança pendente no momento. A planta está de acordo com as especificações base.")
+            st.info("Nenhuma ação de segurança pendente no momento. O design base cumpre os requisitos.")
 
     elif exec_tab == "Relatório Automático":
         st.markdown("<div class='panel'><h3>Gerador de Relatório Executivo</h3></div>", unsafe_allow_html=True)
@@ -467,7 +470,8 @@ elif selected_module == "Análise de Risco":
             
             with st.expander("🔀 Matriz Causa e Efeito p/ Automação (IEC 61511)", expanded=False):
                 df_ce = generate_ce_matrix_from_hazop(st.session_state.pid_hazop_matrix)
-                if not df_ce.empty: 
+                # BLINDAGEM DO DATA FRAME DE MATRIZ C&E
+                if isinstance(df_ce, pd.DataFrame) and not df_ce.empty: 
                     st.dataframe(df_ce, use_container_width=True, hide_index=True)
                     st.download_button("📥 Exportar C&E", df_ce.to_csv(index=False).encode('utf-8'), "ce_matrix.csv", "text/csv")
                 else: 
@@ -481,7 +485,7 @@ elif selected_module == "Análise de Risco":
         
         with c_ml:
             st.markdown("#### 🤖 ML/OREDA Wear-Out")
-            eq_type = st.selectbox("Equipamento Analisado", ["Bomba de Resfriamento", "Válvula de Bloqueio"])
+            eq_type = st.selectbox("Equipamento", ["Bomba de Resfriamento", "Válvula de Bloqueio"])
             t_meses = st.slider("Meses de Uso", 1, 60, 24)
             anomaly = st.slider("Anomalia Preditiva", 0.0, 1.0, 0.2)
             dyn_res = calculate_dynamic_pfd(1e-2 if "Bomba" in eq_type else 1e-3, t_meses, anomaly, eq_type)
@@ -518,24 +522,9 @@ elif selected_module == "Análise de Risco":
                 domino = calculate_domino_effect(dist, m_rate, hc * 1e6)
                 st.error(f"**{domino['status']}** | Carga Térmica: {domino['q_kW_m2']:.2f} kW/m²")
         
-        with st.expander("🏭 Projeção 2D na Planta Baixa (Plotly)", expanded=False):
-            layout_file = st.file_uploader("Upload da Planta (PNG/JPG)", type=["png", "jpg", "jpeg"])
-            lc1, lc2, lc3 = st.columns(3)
-            with lc1: scale_m = st.number_input("Escala: Metros por Pixel?", value=0.1, format="%.3f")
-            with lc2: ox = st.number_input("Origem (Pixel X)", value=500)
-            with lc3: oy = st.number_input("Origem (Pixel Y)", value=500)
-            
-            if layout_file and st.button("Gerar Heatmap na Planta", type="primary"):
-                try:
-                    zonas_exemplo = [
-                        {"radius_m": 15.0, "color": "darkred", "label": "Letal / Ruptura"},
-                        {"radius_m": 30.0, "color": "orange", "label": "Perda de Controle"},
-                        {"radius_m": 60.0, "color": "yellow", "label": "Zona de Restrição"}
-                    ]
-                    fig_layout = build_plant_layout_heatmap(layout_file, scale_m, int(ox), int(oy), zonas_exemplo)
-                    st.plotly_chart(fig_layout, use_container_width=True, theme=None)
-                except Exception as e:
-                    st.error(f"Erro ao processar o Layout 2D. Tente um formato de imagem menor.")
+        with st.expander("🏭 Projeção 2D na Planta Baixa", expanded=False):
+            # Este módulo será completamente refatorado na Sprint 21
+            st.info("Upload de Layout 2D para Heatmaps avançados em desenvolvimento (Sprint 21).")
 
 # ==============================================================================
 # MÓDULO 4: GESTÃO DE MUDANÇA
