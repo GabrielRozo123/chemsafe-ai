@@ -15,6 +15,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from reference_data import NORMS_DB, NORMS_LOOKUP, MODULE_GOVERNANCE
 from streamlit_option_menu import option_menu
+from risk_taxonomy import ACTION_COLUMN_ALIASES, ACTION_VALUE_MAPPINGS, AACE_CLASS5_LIBRARY
 
 from views_engineering import render_engineering_module
 from views_executive import render_executive_module
