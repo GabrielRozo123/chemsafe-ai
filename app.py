@@ -39,6 +39,12 @@ from chart_utils import (
     render_action_bar,
     render_flammability_envelope,
 )
+from app_runtime import (
+    load_profile_with_feedback,
+    load_profile_from_key,
+    bowtie_payload,
+    apply_loaded_case,
+)
 
 APP_CSS = """
 <style>
