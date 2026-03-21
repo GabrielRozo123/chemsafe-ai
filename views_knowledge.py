@@ -5,6 +5,7 @@ from streamlit_option_menu import option_menu
 
 from historical_engine import get_relevant_historical_cases
 from ui_components import render_hero_panel, render_evidence_panel
+from ui_states import render_empty_state
 
 
 def render_knowledge_module(profile, menu_styles: dict, norms_db: list[dict]):
