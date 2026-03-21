@@ -13,6 +13,7 @@ import streamlit as st
 from reference_data import NORMS_DB, MODULE_GOVERNANCE
 from streamlit_option_menu import option_menu
 from app_bootstrap import MENU_STYLES, initialize_session_state
+from action_processing import enrich_action_plan_df, get_action_col
 
 from views_engineering import render_engineering_module
 from views_executive import render_executive_module
