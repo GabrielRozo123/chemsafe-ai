@@ -30,6 +30,15 @@ from action_hub import build_consolidated_action_plan
 from dashboard_engine import calculate_case_readiness_index
 from i18n import t
 from ui_components import render_trust_ribbon
+from chart_utils import (
+    is_valid_df,
+    safe_float,
+    render_modern_gauge,
+    render_modern_radar,
+    render_action_donut,
+    render_action_bar,
+    render_flammability_envelope,
+)
 
 APP_CSS = """
 <style>
