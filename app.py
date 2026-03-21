@@ -21,7 +21,7 @@ from views_executive import render_executive_module
 from views_risk import render_risk_module
 from views_change import render_change_module
 from views_knowledge import render_knowledge_module
-
+from chemicals_seed import LOCAL_COMPOUNDS
 
 
 from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
