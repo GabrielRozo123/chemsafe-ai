@@ -122,9 +122,12 @@ def render_knowledge_module(profile, menu_styles: dict, norms_db: list[dict]):
                 """
             timeline_html += "</div>"
             st.markdown(timeline_html, unsafe_allow_html=True)
-        else:
-            st.info(f"Nenhum incidente catastrófico catalogado especificamente para {profile.identity.get('name')} na base curada atual.")
-
+                else:
+            render_empty_state(
+                title="Nenhum incidente histórico encontrado",
+                message=f"Não há incidente catastrófico catalogado especificamente para {profile.identity.get('name')} na base curada atual.",
+                icon="📚",
+            )
         if st.session_state.audit_mode:
             render_evidence_panel(
                 title="Incidentes históricos relacionados ao ativo",
