@@ -7,21 +7,47 @@ import streamlit as st
 from chemicals_seed import LOCAL_COMPOUNDS
 from compound_engine import build_compound_profile
 
+DEFAULT_COMPOUND_KEY = "ammonia"
 
-def load_profile_with_feedback(query: str):
-    safe_query = re.sub(
+
+def _clean_query(query: str) -> str:
+    return re.sub(
         r"\s+",
         " ",
         str(query).replace("\xa0", " ").replace("Â\xa0", " ").replace("Â ", " "),
     ).strip()
 
+
+def _build_default_profile():
+    aliases = LOCAL_COMPOUNDS.get(DEFAULT_COMPOUND_KEY, {}).get("aliases", ["ammonia"])
+    return build_compound_profile(aliases[0])
+
+
+def load_profile_with_feedback(query: str):
+    safe_query = _clean_query(query)
+
+    if not safe_query:
+        st.warning("Digite um nome de composto ou um número CAS válido.")
+        return st.session_state.get("profile") or _build_default_profile()
+
     with st.spinner(f"Buscando dados no PubChem para '{safe_query}'..."):
-        time.sleep(0.35)
-        return build_compound_profile(safe_query)
+        try:
+            time.sleep(0.35)
+            profile = build_compound_profile(safe_query)
+            if profile is None:
+                raise ValueError("O motor não retornou um perfil válido.")
+            return profile
+
+        except Exception:
+            st.error(
+                f"Não foi possível carregar '{safe_query}'. "
+                "O app continuará usando um composto padrão para evitar interrupção."
+            )
+            return st.session_state.get("profile") or _build_default_profile()
 
 
 def load_profile_from_key(key: str) -> None:
-    aliases = LOCAL_COMPOUNDS[key]["aliases"]
+    aliases = LOCAL_COMPOUNDS.get(key, {}).get("aliases", [key])
     st.session_state.profile = load_profile_with_feedback(aliases[0])
     st.session_state.selected_compound_key = key
 
@@ -38,7 +64,11 @@ def bowtie_payload():
 
 def apply_loaded_case(case_data: dict):
     query_hint = case_data.get("query_hint") or case_data.get("compound_name")
+
     if query_hint:
         st.session_state.profile = load_profile_with_feedback(query_hint)
+    elif st.session_state.get("profile") is None:
+        st.session_state.profile = _build_default_profile()
+
     st.session_state.current_case_name = case_data.get("case_name", "")
     st.session_state.lopa_result = case_data.get("lopa_result")
