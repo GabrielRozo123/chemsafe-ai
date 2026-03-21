@@ -7,6 +7,7 @@ import math
 import re
 import time
 import textwrap
+from views_engineering import render_engineering_module
 from views_executive import render_executive_module
 
 ROOT_DIR = Path(__file__).resolve().parent
