@@ -2,16 +2,8 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-import io
-import math
 import re
 import time
-import textwrap
-from views_engineering import render_engineering_module
-from views_executive import render_executive_module
-from views_risk import render_risk_module
-from views_change import render_change_module
-from views_knowledge import render_knowledge_module
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
@@ -19,56 +11,23 @@ if str(ROOT_DIR) not in sys.path:
 
 import pandas as pd
 import streamlit as st
-import graphviz
 import plotly.graph_objects as go
 import plotly.express as px
 from streamlit_option_menu import option_menu
 
-# Módulos Legados e Ferramentas Visuais
-from bowtie_visual import build_bowtie_custom_figure
-from case_store import list_cases, load_case, save_case
-from chemicals_seed import LOCAL_COMPOUNDS
-from comparator import build_comparison_df
-from compound_engine import build_compound_profile, suggest_hazop_priorities
-from dense_gas_router import classify_dispersion_mode
-from deterministic import IPL_CATALOG, compute_lopa, gaussian_dispersion, pool_fire
-from executive_report import build_executive_bundle
-from hazop_db import HAZOP_DB
-from moc_engine import evaluate_moc
-from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
-from pssr_engine import evaluate_pssr
-from reactivity_engine import evaluate_pairwise_reactivity
-from risk_visuals import build_hazard_fingerprint_figure, build_source_coverage_figure
-from source_governance import (
-    build_evidence_ledger_df,
-    build_source_recommendations,
-    summarize_evidence,
-)
-from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
-from ui_components import (
-    metric_card,
-    render_reference_chips,
-    render_hero_panel,
-    render_trust_ribbon,
-    render_evidence_panel,
-)
+from views_engineering import render_engineering_module
+from views_executive import render_executive_module
+from views_risk import render_risk_module
+from views_change import render_change_module
+from views_knowledge import render_knowledge_module
 
-# NOVOS MÓDULOS SPRINT 11 A 24
+from chemicals_seed import LOCAL_COMPOUNDS
+from compound_engine import build_compound_profile
+from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
 from action_hub import build_consolidated_action_plan
 from dashboard_engine import calculate_case_readiness_index
 from i18n import t
-from area_engine import evaluate_area_risk
-from scenario_library import get_typical_scenarios
-from regulatory_engine import check_regulatory_framework, generate_facilitator_questions
-from map_visuals import render_map_in_streamlit
-from historical_engine import get_relevant_historical_cases
-from pid_engine import EQUIPMENT_PARAMETERS, generate_hazop_from_topology, process_bulk_pid_nodes
-from domino_engine import calculate_domino_effect
-from ce_matrix_engine import generate_ce_matrix_from_hazop
-from hra_engine import calculate_human_error_probability
-from psv_engine import size_psv_gas
-from ml_reliability_engine import calculate_dynamic_pfd
-from runaway_engine import calculate_tmr_adiabatic
+from ui_components import render_trust_ribbon
 
 APP_CSS = """
 <style>
