@@ -178,8 +178,12 @@ def render_risk_module(
                         "ce_matrix.csv",
                         "text/csv",
                     )
-                else:
-                    st.info("Nenhuma arquitetura de Trip (Intertravamento) foi deduzida dos cenários atuais.")
+                                else:
+                    render_empty_state(
+                        title="Nenhuma matriz Causa & Efeito deduzida",
+                        message="Os cenários atuais ainda não geraram uma arquitetura de trip/intertravamento clara para exportação.",
+                        icon="🧩",
+                    )
 
     elif risk_tab == "Verificação SIL (IEC)":
         render_hero_panel(
