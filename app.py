@@ -524,7 +524,16 @@ st.markdown(APP_CSS, unsafe_allow_html=True)
 # ==============================================================================
 # FUNÇÕES DE APOIO
 # ==============================================================================
+def load_profile_with_feedback(query: str):
+    safe_query = re.sub(
+        r"\s+",
+        " ",
+        str(query).replace("\xa0", " ").replace("Â\xa0", " ").replace("Â ", " "),
+    ).strip()
 
+    with st.spinner(f"Buscando dados no PubChem para '{safe_query}'..."):
+        time.sleep(0.35)
+        return build_compound_profile(safe_query)
 
 MENU_STYLES = {
     "container": {
