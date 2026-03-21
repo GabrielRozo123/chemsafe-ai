@@ -523,27 +523,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
-
-MENU_STYLES = {
-    "container": {
-        "padding": "5px",
-        "background-color": "#151b28",
-        "border": "1px solid #2a3441",
-        "border-radius": "10px",
-        "margin-bottom": "20px",
-    },
-    "icon": {"color": "#9ca3af", "font-size": "16px"},
-    "nav-link": {
-        "font-size": "14px",
-        "text-align": "center",
-        "margin": "0px",
-        "color": "#9ca3af",
-        "font-weight": "500",
-        "font-family": "Inter",
-    },
-    "nav-link-selected": {"background-color": "#3b82f6", "color": "white", "font-weight": "600"},
-}
-
+initialize_session_state()
 
 # ==============================================================================
 # ESTADO DA SESSÃO
