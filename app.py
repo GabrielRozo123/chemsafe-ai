@@ -16,6 +16,7 @@ import plotly.express as px
 from reference_data import NORMS_DB, NORMS_LOOKUP, MODULE_GOVERNANCE
 from streamlit_option_menu import option_menu
 from risk_taxonomy import ACTION_COLUMN_ALIASES, ACTION_VALUE_MAPPINGS, AACE_CLASS5_LIBRARY
+from action_processing import enrich_action_plan_df, sanitize_and_translate_action_df, get_action_col
 
 from views_engineering import render_engineering_module
 from views_executive import render_executive_module
