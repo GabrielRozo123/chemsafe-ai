@@ -40,6 +40,13 @@ from source_governance import (
     summarize_evidence,
 )
 from ui_formatters import format_identity_df, format_limits_df, format_physchem_df
+from ui_components import (
+    metric_card,
+    render_reference_chips,
+    render_hero_panel,
+    render_trust_ribbon,
+    render_evidence_panel,
+)
 
 # NOVOS MÓDULOS SPRINT 11 A 24
 from action_hub import build_consolidated_action_plan
