@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-import re
-import time
+
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
@@ -23,8 +22,8 @@ from views_risk import render_risk_module
 from views_change import render_change_module
 from views_knowledge import render_knowledge_module
 
-from chemicals_seed import LOCAL_COMPOUNDS
-from compound_engine import build_compound_profile
+
+
 from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
 from action_hub import build_consolidated_action_plan
 from dashboard_engine import calculate_case_readiness_index
