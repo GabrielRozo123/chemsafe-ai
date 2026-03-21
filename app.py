@@ -10,6 +10,7 @@ import textwrap
 from views_engineering import render_engineering_module
 from views_executive import render_executive_module
 from views_risk import render_risk_module
+from views_change import render_change_module
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
