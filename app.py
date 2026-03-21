@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
+from reference_data import NORMS_DB, NORMS_LOOKUP, MODULE_GOVERNANCE
 from streamlit_option_menu import option_menu
 
 from views_engineering import render_engineering_module
