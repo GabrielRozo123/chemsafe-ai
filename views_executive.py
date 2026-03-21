@@ -202,7 +202,7 @@ def render_executive_module(
                     "text/plain",
                     use_container_width=True,
                 )
-            else:
+        else:
             render_success_state(
                 title="Nenhuma ação pendente no momento",
                 message="A consolidação atual não identificou ações abertas de segurança de processos para este caso.",
