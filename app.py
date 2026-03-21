@@ -523,12 +523,62 @@ st.set_page_config(
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
-
+MENU_STYLES = {
+    "container": {
+        "padding": "5px",
+        "background-color": "#151b28",
+        "border": "1px solid #2a3441",
+        "border-radius": "10px",
+        "margin-bottom": "20px",
+    },
+    "icon": {"color": "#9ca3af", "font-size": "16px"},
+    "nav-link": {
+        "font-size": "14px",
+        "text-align": "center",
+        "margin": "0px",
+        "color": "#9ca3af",
+        "font-weight": "500",
+        "font-family": "Inter",
+    },
+    "nav-link-selected": {"background-color": "#3b82f6", "color": "white", "font-weight": "600"},
+}
 
 
 # ==============================================================================
-# FUNÇÕES DE APOIO
+# ESTADO DA SESSÃO
 # ==============================================================================
+if "lang" not in st.session_state:
+    st.session_state.lang = "pt"
+if "selected_compound_key" not in st.session_state:
+    st.session_state.selected_compound_key = "ammonia"
+if "profile" not in st.session_state:
+    st.session_state.profile = None
+if "lopa_result" not in st.session_state:
+    st.session_state.lopa_result = None
+if "pid_hazop_matrix" not in st.session_state:
+    st.session_state.pid_hazop_matrix = []
+if "current_node_name" not in st.session_state:
+    st.session_state.current_node_name = "Nó 101: Bomba de Recalque"
+if "current_case_name" not in st.session_state:
+    st.session_state.current_case_name = ""
+if "audit_mode" not in st.session_state:
+    st.session_state.audit_mode = True
+if "psv_result" not in st.session_state:
+    st.session_state.psv_result = None
+if "psv_inputs" not in st.session_state:
+    st.session_state.psv_inputs = None
+if "tmr_result" not in st.session_state:
+    st.session_state.tmr_result = None
+if "tmr_inputs" not in st.session_state:
+    st.session_state.tmr_inputs = None
+if "moc_result" not in st.session_state:
+    st.session_state.moc_result = None
+if "pssr_result" not in st.session_state:
+    st.session_state.pssr_result = None
+if "reactivity_result" not in st.session_state:
+    st.session_state.reactivity_result = None
+
+
 
 
 # ==============================================================================
