@@ -156,14 +156,19 @@ def render_sds_upload_panel(profile):
     with col_toggle:
         if ai_available:
             use_ai = st.toggle(
-                "Usar IA (extração avançada)",
+                "🤖 Usar IA (extração avançada)",
                 value=False,
                 help="Habilita extração por LLM para cobertura mais completa. Consome créditos da API OpenAI.",
             )
         else:
             use_ai = False
-            st.caption("ℹ️ Extração por padrões (gratuita)")
-
+            st.toggle(
+                "🤖 Usar IA (extração avançada)",
+                value=False,
+                disabled=True,
+                help="Requer OPENAI_API_KEY configurada nos Secrets do Streamlit.",
+            )
+            st.caption("🔒 Requer API key · [Como configurar](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management)")
     with col_btn:
         btn_label = "🔬 Extrair dados da SDS" + (" com IA" if use_ai else " (gratuito)")
         run_extraction = st.button(btn_label, type="primary", use_container_width=True)
