@@ -6,6 +6,7 @@ import graphviz
 import plotly.graph_objects as go
 from streamlit_option_menu import option_menu
 
+from chart_utils import is_valid_df
 from ui_states import render_empty_state
 from ce_matrix_engine import generate_ce_matrix_from_hazop
 from pid_engine import (
@@ -16,11 +17,7 @@ from pid_engine import (
 from ui_components import render_hero_panel, render_evidence_panel
 
 
-def render_risk_module(
-    profile,
-    menu_styles: dict,
-    is_valid_df_fn,
-):
+def render_risk_module(profile, menu_styles: dict):
     risk_tab = option_menu(
         menu_title=None,
         options=["HAZOP Builder", "Verificação SIL (IEC)", "QRA Social"],
@@ -194,7 +191,7 @@ def render_risk_module(
             with st.expander("🔀 Matriz Causa e Efeito p/ Automação (IEC 61511)", expanded=False):
                 df_ce = generate_ce_matrix_from_hazop(st.session_state.pid_hazop_matrix)
 
-                if is_valid_df_fn(df_ce):
+                if is_valid_df(df_ce):
                     st.dataframe(df_ce, use_container_width=True, hide_index=True)
                     st.download_button(
                         "📥 Exportar C&E",
@@ -320,40 +317,10 @@ def render_risk_module(
         )
 
         fig_fn = go.Figure()
-        fig_fn.add_trace(
-            go.Scatter(
-                x=[1, 10, 100],
-                y=[1e-4, 1e-5, 1e-6],
-                name="Limite Tolerável",
-                line=dict(color="red", dash="dash"),
-            )
-        )
-        fig_fn.add_trace(
-            go.Scatter(
-                x=[1, 10, 100],
-                y=[1e-5, 1e-6, 1e-7],
-                name="Limite Desprezível",
-                line=dict(color="green", dash="dash"),
-            )
-        )
-        fig_fn.add_trace(
-            go.Scatter(
-                x=[10],
-                y=[2e-5],
-                mode="markers+text",
-                text=["Risco Planta"],
-                textposition="top center",
-                marker=dict(size=12, color="white"),
-            )
-        )
-        fig_fn.update_layout(
-            xaxis_type="log",
-            yaxis_type="log",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#9ca3af",
-            height=400,
-        )
+        fig_fn.add_trace(go.Scatter(x=[1, 10, 100], y=[1e-4, 1e-5, 1e-6], name="Limite Tolerável", line=dict(color="red", dash="dash")))
+        fig_fn.add_trace(go.Scatter(x=[1, 10, 100], y=[1e-5, 1e-6, 1e-7], name="Limite Desprezível", line=dict(color="green", dash="dash")))
+        fig_fn.add_trace(go.Scatter(x=[10], y=[2e-5], mode="markers+text", text=["Risco Planta"], textposition="top center", marker=dict(size=12, color="white")))
+        fig_fn.update_layout(xaxis_type="log", yaxis_type="log", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#9ca3af", height=400)
 
         st.plotly_chart(fig_fn, use_container_width=True, theme=None)
 
@@ -368,11 +335,7 @@ def render_risk_module(
                     "Não usar para licenciamento, aceite formal de risco ou justificativa regulatória.",
                     "Exige modelagem quantitativa formal para aplicação decisória robusta.",
                 ],
-                inputs={
-                    "Escala": "Log-log",
-                    "Limites": "Tolerável / Desprezível",
-                    "Status": "Demonstrativo",
-                },
+                inputs={"Escala": "Log-log", "Limites": "Tolerável / Desprezível", "Status": "Demonstrativo"},
                 formula="F(N) vs N em escala logarítmica",
                 note="Painel intencionalmente didático. Para uso formal, substituir por resultados oriundos de QRA quantitativo real.",
             )
