@@ -9,9 +9,14 @@ from case_domain import utc_now_iso
 
 
 def _safe(value: Any, fallback: str = "—") -> str:
-    if value in [None, "", [], {}]:
+    """Converte value para string de forma segura, tolerando numpy/pandas."""
+    if value is None:
         return fallback
-    return str(value)
+    try:
+        s = str(value).strip()
+        return s if s else fallback
+    except Exception:
+        return fallback
 
 
 def _table_from_df(df: pd.DataFrame | None, limit: int = 25) -> str:
@@ -31,7 +36,7 @@ def build_case_snapshot_payload(
     status_note: str,
     review_history: list[dict] | None = None,
     traceability_df: pd.DataFrame | None = None,
-    action_df = None,
+    action_df=None,
 ) -> dict[str, Any]:
     return {
         "snapshot_generated_at": utc_now_iso(),
@@ -67,7 +72,7 @@ def build_case_snapshot_payload(
 def build_case_snapshot_html(
     payload: dict[str, Any],
     traceability_df: pd.DataFrame | None = None,
-    action_df = None,
+    action_df=None,
 ) -> bytes:
     header = payload.get("case_header", {})
     workflow = payload.get("workflow", {})
@@ -76,9 +81,9 @@ def build_case_snapshot_html(
     review_history = workflow.get("review_history", [])
 
     review_items = "".join(
-        f"<li><strong>{escape(str(item.get('timestamp', '—')))}</strong> — "
-        f"{escape(str(item.get('status', '—')))} | {escape(str(item.get('gate', '—')))} | "
-        f"{escape(str(item.get('actor', '—')))}<br>{escape(str(item.get('note', '')))}</li>"
+        f"<li><strong>{escape(_safe(item.get('timestamp', '—')))}</strong> — "
+        f"{escape(_safe(item.get('status', '—')))} | {escape(_safe(item.get('gate', '—')))} | "
+        f"{escape(_safe(item.get('actor', '—')))}<br>{escape(_safe(item.get('note', '')))}</li>"
         for item in review_history[:15]
     ) or "<li>—</li>"
 
