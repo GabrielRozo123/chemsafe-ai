@@ -3,6 +3,7 @@ from __future__ import annotations
 import streamlit as st
 from streamlit_option_menu import option_menu
 
+from chart_utils import safe_float, render_flammability_envelope
 from dense_gas_router import classify_dispersion_mode
 from psv_engine import size_psv_gas
 from runaway_engine import calculate_tmr_adiabatic
@@ -10,12 +11,7 @@ from ui_components import render_hero_panel, render_evidence_panel, metric_card
 from ui_formatters import format_identity_df, format_physchem_df
 
 
-def render_engineering_module(
-    profile,
-    menu_styles: dict,
-    safe_float_fn,
-    render_flammability_envelope_fn,
-):
+def render_engineering_module(profile, menu_styles: dict):
     eng_tab = option_menu(
         menu_title=None,
         options=["Termodinâmica", "Inertização (NFPA 69)", "Emergências (PSV/Runaway)"],
@@ -47,7 +43,7 @@ def render_engineering_module(
                     "Ativo": profile.identity.get("name", "—"),
                     "CAS": profile.identity.get("cas", "—"),
                     "Peso molecular": f"{profile.identity.get('molecular_weight', '—')} g/mol",
-                    "Confiança do perfil": f"{safe_float_fn(getattr(profile, 'confidence_score', 0)):.0f}%",
+                    "Confiança do perfil": f"{safe_float(getattr(profile, 'confidence_score', 0)):.0f}%",
                 },
                 formula="Perfil = identidade + perigos + propriedades\nDispersão = classificação assistida por regras do motor interno",
                 note="Use este painel como base de triagem técnica. Para engenharia final, confirmar dados físico-químicos com referência oficial adotada pela empresa.",
@@ -77,8 +73,8 @@ def render_engineering_module(
             kicker="Explosion Prevention",
         )
 
-        lfl_val = safe_float_fn(profile.limit("LEL_vol", 5.0), 5.0)
-        ufl_val = safe_float_fn(profile.limit("UEL_vol", 15.0), 15.0)
+        lfl_val = safe_float(profile.limit("LEL_vol", 5.0), 5.0)
+        ufl_val = safe_float(profile.limit("UEL_vol", 15.0), 15.0)
 
         st.markdown("<div class='panel'><h3>⚠️ Envelope de Inflamabilidade & Purga de Reatores</h3></div>", unsafe_allow_html=True)
         st.markdown("<div class='note-card'>Calcule a atmosfera segura durante partidas e paradas. Para evitar a mistura explosiva, a concentração de O₂ deve operar abaixo da <b>Limiting Oxygen Concentration (LOC)</b>.</div>", unsafe_allow_html=True)
@@ -92,7 +88,7 @@ def render_engineering_module(
             st.metric("Margem de Segurança Sugerida (Alarme Alto)", f"O₂ < {loc * 0.6:.1f}%")
 
         with c2:
-            fig_flam = render_flammability_envelope_fn(lfl, ufl, loc)
+            fig_flam = render_flammability_envelope(lfl, ufl, loc)
             st.plotly_chart(fig_flam, use_container_width=True, theme=None, config={"displayModeBar": False})
 
         if st.session_state.audit_mode:
@@ -136,7 +132,7 @@ def render_engineering_module(
                     t_rel = st.number_input("Temp. no Alívio (°C)", 50.0)
 
                 if st.button("Executar Sizing", use_container_width=True, type="primary"):
-                    mw = safe_float_fn(profile.identity.get("molecular_weight", 28.0), 28.0)
+                    mw = safe_float(profile.identity.get("molecular_weight", 28.0), 28.0)
                     res = size_psv_gas(w, t_rel, p, 1.0, mw)
                     st.session_state.psv_result = res
                     st.session_state.psv_inputs = {
