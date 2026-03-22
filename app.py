@@ -1200,37 +1200,29 @@ def render_reference_chips(refs: list[str] | None) -> str:
 
 
 def render_hero_panel(title: str, subtitle: str, kicker: str = "Process Safety Intelligence") -> None:
-    st.markdown(
-        f"""
-        <div class="hero-panel">
-            <div class="hero-kicker">{kicker}</div>
-            <div class="hero-title">{title}</div>
-            <div class="hero-subtitle">{subtitle}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    html = f"""<div class="hero-panel">
+<div class="hero-kicker">{kicker}</div>
+<div class="hero-title">{title}</div>
+<div class="hero-subtitle">{subtitle}</div>
+</div>"""
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_trust_ribbon(module_name: str, basis: str, refs: list[str] | None = None, confidence: str = "Alta") -> None:
     refs_html = render_reference_chips(refs)
-    st.markdown(
-        f"""
-        <div class="trust-ribbon">
-            <div class="trust-left">
-                <div class="trust-kicker">Safety Basis</div>
-                <div class="trust-title">{module_name}</div>
-                <div class="trust-text">{basis}</div>
-                {refs_html}
-            </div>
-            <div class="trust-right">
-                <div class="trust-pill">Confiança {confidence}</div>
-                <div class="trust-meta">Rastreabilidade técnica habilitada</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    html = f"""<div class="trust-ribbon">
+<div class="trust-left">
+<div class="trust-kicker">Safety Basis</div>
+<div class="trust-title">{module_name}</div>
+<div class="trust-text">{basis}</div>
+{refs_html}
+</div>
+<div class="trust-right">
+<div class="trust-pill">Confiança {confidence}</div>
+<div class="trust-meta">Rastreabilidade técnica habilitada</div>
+</div>
+</div>"""
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def _html_list(items):
@@ -1251,12 +1243,10 @@ def _html_inputs(inputs: dict | None):
     blocks = []
     for k, v in inputs.items():
         blocks.append(
-            (
-                "<div class='evidence-input-item'>"
-                f"<div class='evidence-input-label'>{normalize_whitespace(str(k))}</div>"
-                f"<div class='evidence-input-value'>{normalize_whitespace(str(v))}</div>"
-                "</div>"
-            )
+            f"<div class='evidence-input-item'>"
+            f"<div class='evidence-input-label'>{normalize_whitespace(str(k))}</div>"
+            f"<div class='evidence-input-value'>{normalize_whitespace(str(v))}</div>"
+            f"</div>"
         )
     return "".join(blocks)
 
@@ -1271,52 +1261,48 @@ def render_evidence_panel(
     formula: str | None = None,
     note: str | None = None,
 ):
+    """Renderiza o painel de evidências com HTML formatado corretamente."""
     refs_html = _html_list(references)
     assumptions_html = _html_list(assumptions)
     inputs_html = _html_inputs(inputs)
     formula_html = normalize_whitespace(formula) if formula else "—"
     note_html = normalize_whitespace(note) if note else "Sem observações adicionais."
 
-    html = f"""
-<div class="evidence-panel">
-    <div class="evidence-kicker">Painel de Evidências por Cálculo</div>
-    <div class="evidence-title">{title}</div>
-    <div class="evidence-sub">{purpose}</div>
-
-    <div class="evidence-grid">
-        <div class="evidence-card">
-            <h4>Método e Referências</h4>
-            <ul>
-                <li><strong>Método:</strong> {normalize_whitespace(method)}</li>
-                {refs_html}
-            </ul>
-        </div>
-
-        <div class="evidence-card">
-            <h4>Entradas Relevantes</h4>
-            <div class="evidence-inputs">{inputs_html}</div>
-        </div>
-
-        <div class="evidence-card">
-            <h4>Hipóteses / Limites</h4>
-            <ul>
-                {assumptions_html}
-            </ul>
-        </div>
-
-        <div class="evidence-card">
-            <h4>Expressão / Lógica</h4>
-            <div class="evidence-code">{formula_html}</div>
-        </div>
-    </div>
-
-    <div class="evidence-card" style="margin-top:14px;">
-        <h4>Observação de Aplicabilidade</h4>
-        <ul><li>{note_html}</li></ul>
-    </div>
+    # CORREÇÃO: Removida indentação excessiva que poderia causar problemas
+    html = f"""<div class="evidence-panel">
+<div class="evidence-kicker">Painel de Evidências por Cálculo</div>
+<div class="evidence-title">{title}</div>
+<div class="evidence-sub">{purpose}</div>
+<div class="evidence-grid">
+<div class="evidence-card">
+<h4>Método e Referências</h4>
+<ul>
+<li><strong>Método:</strong> {normalize_whitespace(method)}</li>
+{refs_html}
+</ul>
 </div>
-"""
-    st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
+<div class="evidence-card">
+<h4>Entradas Relevantes</h4>
+<div class="evidence-inputs">{inputs_html}</div>
+</div>
+<div class="evidence-card">
+<h4>Hipóteses / Limites</h4>
+<ul>
+{assumptions_html}
+</ul>
+</div>
+<div class="evidence-card">
+<h4>Expressão / Lógica</h4>
+<div class="evidence-code">{formula_html}</div>
+</div>
+</div>
+<div class="evidence-card" style="margin-top:14px;">
+<h4>Observação de Aplicabilidade</h4>
+<ul><li>{note_html}</li></ul>
+</div>
+</div>"""
+    
+    st.markdown(html, unsafe_allow_html=True)
 
 
 MENU_STYLES = {
@@ -1424,12 +1410,12 @@ with st.sidebar:
     st.markdown("---")
     st.write(f"**{t('quick_access', lang)}**")
     for key, data in LOCAL_COMPOUNDS.items():
-        if st.button(data["identity"]["name"], key=f"quick_{key}", width="stretch"):
+        if st.button(data["identity"]["name"], key=f"quick_{key}", use_container_width=True):
             load_profile_from_key(key)
 
     st.markdown("---")
     manual_query = st.text_input("Buscar CAS ou Nome")
-    if st.button("Carregar Composto", width="stretch") and manual_query.strip():
+    if st.button("Carregar Composto", use_container_width=True) and manual_query.strip():
         st.session_state.profile = load_profile_with_feedback(manual_query.strip())
 
 
@@ -1438,12 +1424,10 @@ if st.session_state.profile is None:
 profile = st.session_state.profile
 
 st.markdown(
-    f"""
-<div class="context-header">
-    <div>🧪 Ativo Analisado: <span>{profile.identity.get('name', 'N/A')} (CAS: {profile.identity.get('cas', 'N/A')})</span></div>
-    <div>🏭 Topologia Foco: <span>{st.session_state.current_node_name}</span></div>
-</div>
-""",
+    f"""<div class="context-header">
+<div>🧪 Ativo Analisado: <span>{profile.identity.get('name', 'N/A')} (CAS: {profile.identity.get('cas', 'N/A')})</span></div>
+<div>🏭 Topologia Foco: <span>{st.session_state.current_node_name}</span></div>
+</div>""",
     unsafe_allow_html=True,
 )
 
@@ -1538,6 +1522,7 @@ if selected_module == "Visão Executiva":
         left, right = st.columns(2)
         with left:
             st.markdown("<div class='panel'><h3>Índice de Prontidão do Caso (CRI)</h3></div>", unsafe_allow_html=True)
+            # CORREÇÃO: Removido use_container_width=True, usando config alternativo
             st.plotly_chart(render_modern_gauge(cri_data["index"], cri_data["band"]), use_container_width=True, theme=None, config={"displayModeBar": False})
         with right:
             st.markdown("<div class='panel'><h3>Distribuição por Pilares</h3></div>", unsafe_allow_html=True)
@@ -1590,15 +1575,13 @@ if selected_module == "Visão Executiva":
                 st.plotly_chart(render_action_bar(action_df_dash), use_container_width=True, theme=None, config={"displayModeBar": False})
             with col_budget:
                 st.markdown(
-                    f"""
-                    <div style="background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(16,185,129,0.10)); border: 1px solid var(--accent-blue); border-radius: 10px; padding: 20px; height: 250px; display: flex; flex-direction: column; justify-content: center;">
-                        <div style="color: #9ca3af; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; margin-bottom: 5px;">Orçamento Classe 5 (AACE/CCPS)</div>
-                        <div style="color: white; font-size: 1.65rem; font-weight: 800; margin-bottom: 10px;">P50: R$ {orcamento_p50:,.0f}</div>
-                        <div style="font-size: 0.82rem; color: #d1d5db; margin-bottom: 16px;">Faixa estimada: R$ {orcamento_min:,.0f} → R$ {orcamento_max:,.0f}</div>
-                        <div style="font-size: 0.85rem; color: #d1d5db;"><span style="color:#f59e0b">● CAPEX:</span> {capex_qty} itens</div>
-                        <div style="font-size: 0.85rem; color: #d1d5db;"><span style="color:#3b82f6">● OPEX:</span> {opex_qty} itens</div>
-                    </div>
-                    """,
+                    f"""<div style="background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(16,185,129,0.10)); border: 1px solid var(--accent-blue); border-radius: 10px; padding: 20px; height: 250px; display: flex; flex-direction: column; justify-content: center;">
+<div style="color: #9ca3af; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; margin-bottom: 5px;">Orçamento Classe 5 (AACE/CCPS)</div>
+<div style="color: white; font-size: 1.65rem; font-weight: 800; margin-bottom: 10px;">P50: R$ {orcamento_p50:,.0f}</div>
+<div style="font-size: 0.82rem; color: #d1d5db; margin-bottom: 16px;">Faixa estimada: R$ {orcamento_min:,.0f} → R$ {orcamento_max:,.0f}</div>
+<div style="font-size: 0.85rem; color: #d1d5db;"><span style="color:#f59e0b">● CAPEX:</span> {capex_qty} itens</div>
+<div style="font-size: 0.85rem; color: #d1d5db;"><span style="color:#3b82f6">● OPEX:</span> {opex_qty} itens</div>
+</div>""",
                     unsafe_allow_html=True,
                 )
 
@@ -1624,6 +1607,7 @@ if selected_module == "Visão Executiva":
             if "Criticidade" in action_df_dash.columns:
                 disabled_cols.append("Criticidade")
 
+            # CORREÇÃO: Usando width="stretch" ao invés de use_container_width=True
             edited_df = st.data_editor(
                 action_df_dash,
                 width="stretch",
@@ -1998,21 +1982,19 @@ elif selected_module == "Análise de Risco":
                 if "Cards" in view_mode:
                     for _, row in df_hazop.iterrows():
                         st.markdown(
-                            f"""
-                            <div style="background-color: rgba(30, 41, 59, 0.4); border: 1px solid #374151; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                    <span style="color: #9ca3af; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;">{row['Nó']}</span>
-                                    <span style="background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">{row['Palavra-Guia']} {row['Parâmetro']}</span>
-                                </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
-                                    <div><strong style="color: #f87171; font-size: 0.9rem;">⚠️ Causa:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Causa']}</span></div>
-                                    <div><strong style="color: #f87171; font-size: 0.9rem;">💥 Consequência:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Consequência']}</span></div>
-                                </div>
-                                <div style="background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 10px; border-radius: 6px;">
-                                    <strong style="color: #34d399; font-size: 0.9rem;">🛡️ Salvaguardas:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Salvaguarda Atual']}</span>
-                                </div>
-                            </div>
-                            """,
+                            f"""<div style="background-color: rgba(30, 41, 59, 0.4); border: 1px solid #374151; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+<div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+<span style="color: #9ca3af; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;">{row['Nó']}</span>
+<span style="background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">{row['Palavra-Guia']} {row['Parâmetro']}</span>
+</div>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
+<div><strong style="color: #f87171; font-size: 0.9rem;">⚠️ Causa:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Causa']}</span></div>
+<div><strong style="color: #f87171; font-size: 0.9rem;">💥 Consequência:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Consequência']}</span></div>
+</div>
+<div style="background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 10px; border-radius: 6px;">
+<strong style="color: #34d399; font-size: 0.9rem;">🛡️ Salvaguardas:</strong><br><span style="color: #d1d5db; font-size: 0.95rem;">{row['Salvaguarda Atual']}</span>
+</div>
+</div>""",
                             unsafe_allow_html=True,
                         )
                 else:
@@ -2074,13 +2056,11 @@ elif selected_module == "Análise de Risco":
             sil = "SIL 3" if pfd_avg < 1e-3 else "SIL 2" if pfd_avg < 1e-2 else "SIL 1" if pfd_avg < 1e-1 else "Não Classificado"
 
             st.markdown(
-                f"""
-                <div style='background:rgba(16,185,129,0.1); border:1px solid #10b981; border-radius:8px; padding:15px; margin-top:20px; text-align:center;'>
-                    <span style='color:#9ca3af; font-size:0.8rem; text-transform:uppercase;'>Resultado Final (PFDavg)</span><br>
-                    <span style='color:white; font-size:2.5rem; font-weight:800;'>{pfd_avg:.2e}</span><br>
-                    <span style='color:#10b981; font-size:1.2rem; font-weight:700;'>Alcança {sil}</span>
-                </div>
-                """,
+                f"""<div style='background:rgba(16,185,129,0.1); border:1px solid #10b981; border-radius:8px; padding:15px; margin-top:20px; text-align:center;'>
+<span style='color:#9ca3af; font-size:0.8rem; text-transform:uppercase;'>Resultado Final (PFDavg)</span><br>
+<span style='color:white; font-size:2.5rem; font-weight:800;'>{pfd_avg:.2e}</span><br>
+<span style='color:#10b981; font-size:1.2rem; font-weight:700;'>Alcança {sil}</span>
+</div>""",
                 unsafe_allow_html=True,
             )
 
@@ -2296,18 +2276,16 @@ elif selected_module == "Base de Conhecimento":
         for idx, norma in enumerate(filtered_normas):
             with cols[idx % 2]:
                 st.markdown(
-                    f"""
-                    <div class="doc-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <span style="color:#9ca3af; font-size:0.8rem; font-weight:700;">{norma['tag']}</span>
-                            <span class="doc-tag">{norma['area']}</span>
-                        </div>
-                        <span class="doc-title">{norma['id']} — {norma['title']}</span>
-                        <p class="doc-desc"><strong>Escopo:</strong> {norma['desc']}</p>
-                        <p class="doc-desc"><strong>Aplicação típica:</strong> {norma['application']}</p>
-                        <p class="doc-desc"><strong>Nota:</strong> {norma['status_note']}</p>
-                    </div>
-                    """,
+                    f"""<div class="doc-card">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+<span style="color:#9ca3af; font-size:0.8rem; font-weight:700;">{norma['tag']}</span>
+<span class="doc-tag">{norma['area']}</span>
+</div>
+<span class="doc-title">{norma['id']} — {norma['title']}</span>
+<p class="doc-desc"><strong>Escopo:</strong> {norma['desc']}</p>
+<p class="doc-desc"><strong>Aplicação típica:</strong> {norma['application']}</p>
+<p class="doc-desc"><strong>Nota:</strong> {norma['status_note']}</p>
+</div>""",
                     unsafe_allow_html=True,
                 )
                 st.write("")
@@ -2347,16 +2325,14 @@ elif selected_module == "Base de Conhecimento":
         if relevant_cases:
             timeline_html = "<div class='history-timeline'>"
             for case in relevant_cases:
-                timeline_html += f"""
-                <div class='history-item'>
-                    <div style='color: #3b82f6; font-weight: 700; font-size: 1.1rem;'>{case['ano']}</div>
-                    <div style='font-size: 1.2rem; font-weight: 600; color: #f3f4f6; margin-top: 5px;'>{case['evento']}</div>
-                    <div style='background: rgba(30,41,59,0.5); padding: 15px; border-radius: 8px; margin-top: 10px; border-left: 3px solid #f59e0b;'>
-                        <strong style='color: #f59e0b; font-size: 0.85rem; text-transform: uppercase;'>Mecanismo de Falha</strong><br>
-                        <span style='color: #d1d5db; font-size: 0.95rem; line-height: 1.5;'>{case['mecanismo']}</span>
-                    </div>
-                </div>
-                """
+                timeline_html += f"""<div class='history-item'>
+<div style='color: #3b82f6; font-weight: 700; font-size: 1.1rem;'>{case['ano']}</div>
+<div style='font-size: 1.2rem; font-weight: 600; color: #f3f4f6; margin-top: 5px;'>{case['evento']}</div>
+<div style='background: rgba(30,41,59,0.5); padding: 15px; border-radius: 8px; margin-top: 10px; border-left: 3px solid #f59e0b;'>
+<strong style='color: #f59e0b; font-size: 0.85rem; text-transform: uppercase;'>Mecanismo de Falha</strong><br>
+<span style='color: #d1d5db; font-size: 0.95rem; line-height: 1.5;'>{case['mecanismo']}</span>
+</div>
+</div>"""
             timeline_html += "</div>"
             st.markdown(timeline_html, unsafe_allow_html=True)
         else:
