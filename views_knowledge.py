@@ -21,7 +21,10 @@ def render_knowledge_module(profile, menu_styles: dict, norms_db: list[dict]):
     if kb_tab == "Normas e Referências":
         render_hero_panel(
             title="Biblioteca Curada de Normas e Referências",
-            subtitle="Consulta rápida a fundamentos técnicos relevantes para engenharia e segurança de processos. Validar sempre a edição vigente oficial antes de uso formal.",
+            subtitle=(
+                "Consulta rápida a fundamentos técnicos relevantes para engenharia e "
+                "segurança de processos. Validar sempre a edição vigente oficial antes de uso formal."
+            ),
             kicker="Knowledge Base",
         )
 
@@ -31,46 +34,63 @@ def render_knowledge_module(profile, menu_styles: dict, norms_db: list[dict]):
         )
 
         c_search, c_filter, c_area = st.columns([2.2, 1, 1.2])
+
         search_term = c_search.text_input(
             "🔍 Buscar por código, título ou palavra-chave...",
             placeholder="Ex: API 520, HAZOP, SIS...",
         )
-        tag_filter = c_filter.selectbox("Entidade", ["Todos", "API", "OSHA", "IEC", "NFPA", "CCPS", "AACE"])
-        area_filter = c_area.selectbox("Área", ["Todas"] + sorted(list({n["area"] for n in norms_db})))
+        tag_filter = c_filter.selectbox(
+            "Entidade",
+            ["Todos", "API", "OSHA", "IEC", "NFPA", "CCPS", "AACE"],
+        )
+        area_filter = c_area.selectbox(
+            "Área",
+            ["Todas"] + sorted(list({n["area"] for n in norms_db})),
+        )
 
         filtered_normas = []
+        s = search_term.lower().strip()
+
         for n in norms_db:
-            s = search_term.lower().strip()
             matches_search = (
                 s in n["id"].lower()
                 or s in n["title"].lower()
                 or s in n["desc"].lower()
                 or s in n["application"].lower()
             ) if s else True
+
             matches_tag = (tag_filter == "Todos" or n["tag"] == tag_filter)
             matches_area = (area_filter == "Todas" or n["area"] == area_filter)
+
             if matches_search and matches_tag and matches_area:
                 filtered_normas.append(n)
 
-        cols = st.columns(2)
-        for idx, norma in enumerate(filtered_normas):
-            with cols[idx % 2]:
-                st.markdown(
-                    f"""
-                    <div class="doc-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <span style="color:#9ca3af; font-size:0.8rem; font-weight:700;">{norma['tag']}</span>
-                            <span class="doc-tag">{norma['area']}</span>
+        if filtered_normas:
+            cols = st.columns(2)
+            for idx, norma in enumerate(filtered_normas):
+                with cols[idx % 2]:
+                    st.markdown(
+                        f"""
+                        <div class="doc-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <span style="color:#9ca3af; font-size:0.8rem; font-weight:700;">{norma['tag']}</span>
+                                <span class="doc-tag">{norma['area']}</span>
+                            </div>
+                            <span class="doc-title">{norma['id']} — {norma['title']}</span>
+                            <p class="doc-desc"><strong>Escopo:</strong> {norma['desc']}</p>
+                            <p class="doc-desc"><strong>Aplicação típica:</strong> {norma['application']}</p>
+                            <p class="doc-desc"><strong>Nota:</strong> {norma['status_note']}</p>
                         </div>
-                        <span class="doc-title">{norma['id']} — {norma['title']}</span>
-                        <p class="doc-desc"><strong>Escopo:</strong> {norma['desc']}</p>
-                        <p class="doc-desc"><strong>Aplicação típica:</strong> {norma['application']}</p>
-                        <p class="doc-desc"><strong>Nota:</strong> {norma['status_note']}</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                st.write("")
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    st.write("")
+        else:
+            render_empty_state(
+                title="Nenhuma norma encontrada",
+                message="A combinação atual de filtros não retornou itens na biblioteca curada.",
+                icon="📘",
+            )
 
         if st.session_state.audit_mode:
             render_evidence_panel(
@@ -96,17 +116,24 @@ def render_knowledge_module(profile, menu_styles: dict, norms_db: list[dict]):
     elif kb_tab == "Incidentes Históricos":
         render_hero_panel(
             title="Incidentes Históricos e Lições Aprendidas",
-            subtitle="Contextualize o risco do ativo com eventos históricos relacionados para enriquecer discussão de barreiras, consequências e governança.",
+            subtitle=(
+                "Contextualize o risco do ativo com eventos históricos relacionados para "
+                "enriquecer discussão de barreiras, consequências e governança."
+            ),
             kicker="Lessons Learned",
         )
 
-        st.markdown("<div class='panel'><h3>📚 Banco de Incidentes e Lições Aprendidas</h3></div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='panel'><h3>📚 Banco de Incidentes e Lições Aprendidas</h3></div>",
+            unsafe_allow_html=True,
+        )
         st.markdown(
             f"<p style='color: #9ca3af; margin-bottom: 30px;'>Filtrando falhas históricas globais relacionadas à substância <b>{profile.identity.get('name')}</b>.</p>",
             unsafe_allow_html=True,
         )
 
         relevant_cases = get_relevant_historical_cases(profile)
+
         if relevant_cases:
             timeline_html = "<div class='history-timeline'>"
             for case in relevant_cases:
@@ -122,12 +149,13 @@ def render_knowledge_module(profile, menu_styles: dict, norms_db: list[dict]):
                 """
             timeline_html += "</div>"
             st.markdown(timeline_html, unsafe_allow_html=True)
-                else:
+        else:
             render_empty_state(
                 title="Nenhum incidente histórico encontrado",
                 message=f"Não há incidente catastrófico catalogado especificamente para {profile.identity.get('name')} na base curada atual.",
                 icon="📚",
             )
+
         if st.session_state.audit_mode:
             render_evidence_panel(
                 title="Incidentes históricos relacionados ao ativo",
