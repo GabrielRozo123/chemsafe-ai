@@ -6,7 +6,6 @@ import io
 import math
 import re
 import time
-import textwrap
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
@@ -1277,46 +1276,32 @@ def render_evidence_panel(
     formula_html = normalize_whitespace(formula) if formula else "—"
     note_html = normalize_whitespace(note) if note else "Sem observações adicionais."
 
-    html = f"""
-<div class="evidence-panel">
-    <div class="evidence-kicker">Painel de Evidências por Cálculo</div>
-    <div class="evidence-title">{title}</div>
-    <div class="evidence-sub">{purpose}</div>
-
-    <div class="evidence-grid">
-        <div class="evidence-card">
-            <h4>Método e Referências</h4>
-            <ul>
-                <li><strong>Método:</strong> {normalize_whitespace(method)}</li>
-                {refs_html}
-            </ul>
-        </div>
-
-        <div class="evidence-card">
-            <h4>Entradas Relevantes</h4>
-            <div class="evidence-inputs">{inputs_html}</div>
-        </div>
-
-        <div class="evidence-card">
-            <h4>Hipóteses / Limites</h4>
-            <ul>
-                {assumptions_html}
-            </ul>
-        </div>
-
-        <div class="evidence-card">
-            <h4>Expressão / Lógica</h4>
-            <div class="evidence-code">{formula_html}</div>
-        </div>
-    </div>
-
-    <div class="evidence-card" style="margin-top:14px;">
-        <h4>Observação de Aplicabilidade</h4>
-        <ul><li>{note_html}</li></ul>
-    </div>
-</div>
-"""
-    st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
+    html = (
+        '<div class="evidence-panel">'
+        '<div class="evidence-kicker">Painel de Evidências por Cálculo</div>'
+        f'<div class="evidence-title">{title}</div>'
+        f'<div class="evidence-sub">{purpose}</div>'
+        '<div class="evidence-grid">'
+        '<div class="evidence-card">'
+        '<h4>Método e Referências</h4>'
+        f'<ul><li><strong>Método:</strong> {normalize_whitespace(method)}</li>'
+        f'{refs_html}</ul></div>'
+        '<div class="evidence-card">'
+        '<h4>Entradas Relevantes</h4>'
+        f'<div class="evidence-inputs">{inputs_html}</div></div>'
+        '<div class="evidence-card">'
+        '<h4>Hipóteses / Limites</h4>'
+        f'<ul>{assumptions_html}</ul></div>'
+        '<div class="evidence-card">'
+        '<h4>Expressão / Lógica</h4>'
+        f'<div class="evidence-code">{formula_html}</div></div>'
+        '</div>'
+        '<div class="evidence-card" style="margin-top:14px;">'
+        '<h4>Observação de Aplicabilidade</h4>'
+        f'<ul><li>{note_html}</li></ul></div>'
+        '</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 MENU_STYLES = {
@@ -1367,6 +1352,30 @@ if "tmr_result" not in st.session_state:
     st.session_state.tmr_result = None
 if "tmr_inputs" not in st.session_state:
     st.session_state.tmr_inputs = None
+if "moc_result" not in st.session_state:
+    st.session_state.moc_result = None
+if "pssr_result" not in st.session_state:
+    st.session_state.pssr_result = None
+if "reactivity_result" not in st.session_state:
+    st.session_state.reactivity_result = None
+if "psi_summary" not in st.session_state:
+    st.session_state.psi_summary = None
+if "case_status" not in st.session_state:
+    st.session_state.case_status = "rascunho"
+if "case_status_note" not in st.session_state:
+    st.session_state.case_status_note = ""
+if "case_owner" not in st.session_state:
+    st.session_state.case_owner = ""
+if "case_reviewer" not in st.session_state:
+    st.session_state.case_reviewer = ""
+if "case_decision_gate" not in st.session_state:
+    st.session_state.case_decision_gate = ""
+if "review_history" not in st.session_state:
+    st.session_state.review_history = []
+if "traceability_rows" not in st.session_state:
+    st.session_state.traceability_rows = []
+if "report_bundle" not in st.session_state:
+    st.session_state.report_bundle = None
 
 
 def load_profile_from_key(key: str) -> None:
@@ -1538,10 +1547,10 @@ if selected_module == "Visão Executiva":
         left, right = st.columns(2)
         with left:
             st.markdown("<div class='panel'><h3>Índice de Prontidão do Caso (CRI)</h3></div>", unsafe_allow_html=True)
-            st.plotly_chart(render_modern_gauge(cri_data["index"], cri_data["band"]), use_container_width=True, theme=None, config={"displayModeBar": False})
+            st.plotly_chart(render_modern_gauge(cri_data["index"], cri_data["band"]), width="stretch", theme=None, config={"displayModeBar": False})
         with right:
             st.markdown("<div class='panel'><h3>Distribuição por Pilares</h3></div>", unsafe_allow_html=True)
-            st.plotly_chart(render_modern_radar(cri_data), use_container_width=True, theme=None, config={"displayModeBar": False})
+            st.plotly_chart(render_modern_radar(cri_data), width="stretch", theme=None, config={"displayModeBar": False})
 
     elif exec_tab == "Action Plan":
         render_hero_panel(
@@ -1585,9 +1594,9 @@ if selected_module == "Visão Executiva":
 
             col_chart1, col_chart2, col_budget = st.columns([1.15, 1.15, 1.1])
             with col_chart1:
-                st.plotly_chart(render_action_donut(action_df_dash), use_container_width=True, theme=None, config={"displayModeBar": False})
+                st.plotly_chart(render_action_donut(action_df_dash), width="stretch", theme=None, config={"displayModeBar": False})
             with col_chart2:
-                st.plotly_chart(render_action_bar(action_df_dash), use_container_width=True, theme=None, config={"displayModeBar": False})
+                st.plotly_chart(render_action_bar(action_df_dash), width="stretch", theme=None, config={"displayModeBar": False})
             with col_budget:
                 st.markdown(
                     f"""
@@ -1644,7 +1653,7 @@ if selected_module == "Visão Executiva":
                     edited_df.to_csv(index=False).encode("utf-8"),
                     "action_plan.csv",
                     "text/csv",
-                    use_container_width=True,
+                    width="stretch",
                 )
 
             with btn_col2:
@@ -1668,7 +1677,7 @@ if selected_module == "Visão Executiva":
                     briefing_text.encode("utf-8"),
                     "ordem_servico.txt",
                     "text/plain",
-                    use_container_width=True,
+                    width="stretch",
                 )
         else:
             st.info("Nenhuma ação de segurança pendente no momento. A planta está de acordo com as especificações.")
@@ -1794,7 +1803,7 @@ elif selected_module == "Engenharia":
 
         with c2:
             fig_flam = render_flammability_envelope(lfl, ufl, loc)
-            st.plotly_chart(fig_flam, use_container_width=True, theme=None, config={"displayModeBar": False})
+            st.plotly_chart(fig_flam, width="stretch", theme=None, config={"displayModeBar": False})
 
         if st.session_state.audit_mode:
             render_evidence_panel(
@@ -1836,7 +1845,7 @@ elif selected_module == "Engenharia":
                     p = st.number_input("Pressão Setpoint (kPag)", 500.0)
                     t_rel = st.number_input("Temp. no Alívio (°C)", 50.0)
 
-                if st.button("Executar Sizing", use_container_width=True, type="primary"):
+                if st.button("Executar Sizing", width="stretch", type="primary"):
                     mw = safe_float(profile.identity.get("molecular_weight", 28.0), 28.0)
                     res = size_psv_gas(w, t_rel, p, 1.0, mw)
                     st.session_state.psv_result = res
@@ -1874,7 +1883,7 @@ elif selected_module == "Engenharia":
                     t0 = st.number_input("Temp. Processo (°C)", 80.0)
                     ea = st.number_input("Energia Ativação (kJ/mol)", 100.0)
 
-                if st.button("Estimar TMR (Time to Maximum Rate)", use_container_width=True):
+                if st.button("Estimar TMR (Time to Maximum Rate)", width="stretch"):
                     res = calculate_tmr_adiabatic(t0, ea, 1e12, 1500, 2.5)
                     st.session_state.tmr_result = res
                     st.session_state.tmr_inputs = {
@@ -1966,7 +1975,7 @@ elif selected_module == "Análise de Risco":
                     dot.node(str(i), eq)
                     if i > 0:
                         dot.edge(str(i - 1), str(i))
-                st.graphviz_chart(dot, use_container_width=True)
+                st.graphviz_chart(dot, width="stretch")
 
             if st.button("🚀 Consolidar Topologia em HAZOP", type="primary"):
                 st.session_state.pid_hazop_matrix = generate_hazop_from_topology(
@@ -2126,7 +2135,7 @@ elif selected_module == "Análise de Risco":
             font_color="#9ca3af",
             height=400,
         )
-        st.plotly_chart(fig_fn, use_container_width=True, theme=None)
+        st.plotly_chart(fig_fn, width="stretch", theme=None)
 
         if st.session_state.audit_mode:
             render_evidence_panel(
