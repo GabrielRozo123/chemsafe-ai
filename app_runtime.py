@@ -20,7 +20,21 @@ def _clean_query(query: str) -> str:
 
 def _build_default_profile():
     aliases = LOCAL_COMPOUNDS.get(DEFAULT_COMPOUND_KEY, {}).get("aliases", ["ammonia"])
-    return build_compound_profile(aliases[0])
+    return _cached_build_profile(aliases[0])
+
+
+# --------------------------------------------------------------------------
+# Cache do perfil: evita re-fetch de PubChem/NIST/NIOSH a cada rerun
+# --------------------------------------------------------------------------
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_build_profile(query: str):
+    """Wrapper cacheado sobre ``build_compound_profile``.
+
+    O TTL de 10 min garante que o perfil seja reaproveitado entre reruns
+    normais do Streamlit, mas se torna obsoleto rápido o bastante para
+    capturar atualizações se o usuário trocar de composto.
+    """
+    return build_compound_profile(query)
 
 
 def load_profile_with_feedback(query: str):
@@ -30,10 +44,9 @@ def load_profile_with_feedback(query: str):
         st.warning("Digite um nome de composto ou um número CAS válido.")
         return st.session_state.get("profile") or _build_default_profile()
 
-    with st.spinner(f"Buscando dados no PubChem para '{safe_query}'..."):
+    with st.spinner(f"Buscando dados para '{safe_query}'..."):
         try:
-            time.sleep(0.35)
-            profile = build_compound_profile(safe_query)
+            profile = _cached_build_profile(safe_query)
             if profile is None:
                 raise ValueError("O motor não retornou um perfil válido.")
             return profile
@@ -82,5 +95,4 @@ def apply_loaded_case(case_data: dict):
     st.session_state.case_reviewer = case_data.get("case_reviewer", "")
     st.session_state.case_decision_gate = case_data.get("case_decision_gate", "")
     st.session_state.review_history = case_data.get("review_history", [])
-    st.session_state.traceability_rows = case_data.get("traceability_rows", [])
     st.session_state.psi_summary = case_data.get("psi_summary")
