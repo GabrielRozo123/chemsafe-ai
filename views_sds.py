@@ -1,7 +1,7 @@
 """View do leitor de SDS/FISPQ.
 
 Integra-se como sub-tab no módulo de Engenharia ou pode ser chamado
-de qualquer lugar via ``render_sds_upload_panel(profile, ai_client)``.
+de qualquer lugar via ``render_sds_upload_panel(profile)``.
 """
 from __future__ import annotations
 
@@ -31,12 +31,14 @@ def _get_ai_client():
         return None
 
 
-def render_sds_upload_panel(profile):
-    """Renderiza o painel completo de upload e leitura de SDS/FISPQ.
+def _ai_is_available() -> bool:
+    """Verifica se a integração com IA está disponível."""
+    client = _get_ai_client()
+    return client is not None and getattr(client, "enabled", False)
 
-    Args:
-        profile: CompoundProfile atual.
-    """
+
+def render_sds_upload_panel(profile):
+    """Renderiza o painel completo de upload e leitura de SDS/FISPQ."""
     render_hero_panel(
         title="Leitor Inteligente de SDS / FISPQ",
         subtitle=(
@@ -58,8 +60,9 @@ def render_sds_upload_panel(profile):
                 "preparação de estudos e eliminar transcrição manual de dados."
             ),
             method=(
-                "Rota principal: LLM com JSON schema estrito extrai seções 2, 5, 8, 9 e 10 da SDS. "
-                "Rota fallback: regex para campos críticos (flash point, LFL/UFL, IDLH, TLV, CAS)."
+                "Rota padrão: extração por padrões (regex) para campos críticos de process safety — "
+                "funciona sem custo e sem API key. "
+                "Rota opcional (IA): LLM com JSON schema estrito para extração mais completa das seções 2, 5, 8, 9 e 10."
             ),
             references=["ABNT NBR 14725-4", "GHS Rev.10", "OSHA 29 CFR 1910.1200"],
             assumptions=[
@@ -70,10 +73,10 @@ def render_sds_upload_panel(profile):
             ],
             inputs={
                 "Formato aceito": "PDF (SDS/FISPQ)",
-                "Seções extraídas": "1, 2, 5, 8, 9, 10, 15",
-                "Motor": "IA (JSON schema) + fallback regex",
+                "Seções extraídas": "2, 5, 8, 9, 10 (IA) | CAS, flash, LFL, IDLH, TLV, H-codes (regex)",
+                "Motor padrão": "Regex (gratuito)",
             },
-            formula="PDF → texto → LLM/regex → JSON estruturado → revisão → merge no perfil",
+            formula="PDF → texto → regex ou LLM → JSON estruturado → revisão → merge no perfil",
             note=(
                 "Use para acelerar preparação de workshops. Para dados regulatórios "
                 "finais, confirmar com a SDS original assinada pelo fabricante."
@@ -143,28 +146,52 @@ def render_sds_upload_panel(profile):
         )
 
     # ------------------------------------------------------------------
-    # Parsing (IA ou regex)
+    # Seleção do motor de extração
     # ------------------------------------------------------------------
-    if st.button("🔬 Extrair dados da SDS", type="primary", use_container_width=True):
-        ai_client = _get_ai_client()
-        use_ai = ai_client is not None and getattr(ai_client, "enabled", False)
+    st.markdown("---")
+    ai_available = _ai_is_available()
 
-        if use_ai:
+    col_btn, col_toggle = st.columns([3, 1.5])
+
+    with col_toggle:
+        if ai_available:
+            use_ai = st.toggle(
+                "Usar IA (extração avançada)",
+                value=False,
+                help="Habilita extração por LLM para cobertura mais completa. Consome créditos da API OpenAI.",
+            )
+        else:
+            use_ai = False
+            st.caption("ℹ️ Extração por padrões (gratuita)")
+
+    with col_btn:
+        btn_label = "🔬 Extrair dados da SDS" + (" com IA" if use_ai else " (gratuito)")
+        run_extraction = st.button(btn_label, type="primary", use_container_width=True)
+
+    # ------------------------------------------------------------------
+    # Parsing
+    # ------------------------------------------------------------------
+    if run_extraction:
+        if use_ai and ai_available:
             with st.spinner("Analisando SDS com inteligência artificial..."):
+                ai_client = _get_ai_client()
                 sds_data = parse_sds_with_ai(ai_client, sds_text)
+
+            if sds_data.get("error"):
+                st.warning(
+                    f"Erro na extração por IA: {sds_data.get('raw', sds_data.get('error'))}. "
+                    "Usando fallback por padrões..."
+                )
+                sds_data = parse_sds_with_regex(sds_text)
+                st.session_state.sds_extraction_mode = "Regex (fallback)"
+            else:
+                st.session_state.sds_extraction_mode = "IA"
         else:
             with st.spinner("Analisando SDS com extração por padrões..."):
                 sds_data = parse_sds_with_regex(sds_text)
-
-        if sds_data.get("error"):
-            st.warning(
-                f"Erro na extração por IA: {sds_data.get('raw', sds_data.get('error'))}. "
-                "Tentando fallback por regex..."
-            )
-            sds_data = parse_sds_with_regex(sds_text)
+            st.session_state.sds_extraction_mode = "Regex"
 
         st.session_state.sds_extracted_data = sds_data
-        st.session_state.sds_extraction_mode = "IA" if use_ai and not sds_data.get("error") else "Regex"
 
     # ------------------------------------------------------------------
     # Revisão dos dados extraídos
@@ -174,7 +201,6 @@ def render_sds_upload_panel(profile):
         return
 
     extraction_mode = st.session_state.get("sds_extraction_mode", "—")
-    confidence = sds_data.get("extraction_confidence", "—")
     notes = sds_data.get("extraction_notes", [])
 
     # KPIs da extração
@@ -192,7 +218,8 @@ def render_sds_upload_panel(profile):
 
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.markdown(metric_card("Motor", extraction_mode), unsafe_allow_html=True)
+        mode_color = "risk-green" if "IA" in extraction_mode else "risk-blue"
+        st.markdown(metric_card("Motor", extraction_mode, mode_color), unsafe_allow_html=True)
     with c2:
         st.markdown(metric_card("Físico-química", f"{n_physchem} campos", "risk-blue", mono=True), unsafe_allow_html=True)
     with c3:
@@ -249,7 +276,6 @@ def render_sds_upload_panel(profile):
                 profile, sds_data, overwrite=overwrite
             )
 
-            # Atualiza o perfil na session
             st.session_state.profile = updated_profile
             st.session_state.sds_merge_changes = changes
 
