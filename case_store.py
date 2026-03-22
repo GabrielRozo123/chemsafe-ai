@@ -31,6 +31,16 @@ def save_case(
     moc_result: dict | None = None,
     pssr_result: dict | None = None,
     reactivity_result: dict | None = None,
+    current_node_name: str = "",
+    case_status: str = "rascunho",
+    case_status_note: str = "",
+    case_owner: str = "",
+    case_reviewer: str = "",
+    case_decision_gate: str = "",
+    review_history: list[dict] | None = None,
+    traceability_rows: list[dict] | None = None,
+    psi_summary: dict | None = None,
+    case_header: dict | None = None,
 ):
     payload = {
         "case_name": case_name,
@@ -46,6 +56,16 @@ def save_case(
         "reactivity_result": reactivity_result,
         "routing": profile.routing,
         "confidence_score": profile.confidence_score,
+        "current_node_name": current_node_name,
+        "case_status": case_status,
+        "case_status_note": case_status_note,
+        "case_owner": case_owner,
+        "case_reviewer": case_reviewer,
+        "case_decision_gate": case_decision_gate,
+        "review_history": review_history or [],
+        "traceability_rows": traceability_rows or [],
+        "psi_summary": psi_summary or {},
+        "case_header": case_header or {},
     }
     _case_path(case_name).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -61,6 +81,9 @@ def list_cases() -> list[dict]:
                     "compound_name": data.get("compound_name", ""),
                     "saved_at": data.get("saved_at", ""),
                     "confidence_score": data.get("confidence_score", ""),
+                    "case_status": data.get("case_status", "rascunho"),
+                    "case_decision_gate": data.get("case_decision_gate", ""),
+                    "node_name": data.get("current_node_name", ""),
                 }
             )
         except Exception:
