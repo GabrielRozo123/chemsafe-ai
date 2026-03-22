@@ -44,6 +44,15 @@ def initialize_session_state() -> None:
         "moc_result": None,
         "pssr_result": None,
         "reactivity_result": None,
+        "psi_summary": None,
+        "case_status": "rascunho",
+        "case_status_note": "",
+        "case_owner": "",
+        "case_reviewer": "",
+        "case_decision_gate": "",
+        "review_history": [],
+        "traceability_rows": [],
+        "report_bundle": None,
     }
 
     for key, value in defaults.items():
