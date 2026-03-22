@@ -63,7 +63,13 @@ st.session_state.setdefault("traceability_rows", [])
 st.session_state.setdefault("psi_summary", None)
 st.session_state.setdefault("report_bundle", None)
 
-
+case_header = build_case_header(
+    profile=profile,
+    node_name=st.session_state.get("current_node_name", "—"),
+    case_name=st.session_state.get("current_case_name", ""),
+    owner=st.session_state.get("case_owner", ""),
+    reviewer=st.session_state.get("case_reviewer", ""),
+)
 
 APP_CSS = """
 <style>
