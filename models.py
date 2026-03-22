@@ -32,14 +32,24 @@ class CopilotAnswer:
 
 @dataclass
 class HazardScenario:
+    """Cenário de perigo gerado por IA ou por motor determinístico.
+
+    NOTA: os campos foram alinhados com o schema JSON usado em
+    ``hazard_extractor.generate_hazop_from_text`` e com o prompt
+    ``PREHAZOP_JSON_SCHEMA``.  Os nomes antigos (parameter, guideword,
+    recommendation singular) foram substituídos pelos que o código
+    efetivamente produz.
+    """
+
     node: str
-    parameter: str
-    guideword: str
+    deviation: str
     cause: str
     consequence: str
-    safeguards: List[str]
-    recommendation: str
-    risk_rank: str
+    safeguards: List[str] = field(default_factory=list)
+    recommendations: List[str] = field(default_factory=list)
+    severity: str = "Medium"
+    likelihood: str = "Medium"
+    risk_rank: str = "Médio"
 
 
 @dataclass
