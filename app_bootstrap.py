@@ -38,6 +38,10 @@ _SESSION_DEFAULTS: dict = {
     # Perfil e dados do composto
     "profile": None,
     "compound_cache": {},
+    # SDS / FISPQ reader
+    "sds_extracted_data": None,
+    "sds_extraction_mode": None,
+    "sds_merge_changes": None,
     # Caso / projeto
     "current_case_name": "",
     "current_node_name": "Nó 101: Bomba de Recalque",
