@@ -9,19 +9,23 @@ from psv_engine import size_psv_gas
 from runaway_engine import calculate_tmr_adiabatic
 from ui_components import render_hero_panel, render_evidence_panel, metric_card
 from ui_formatters import format_identity_df, format_physchem_df
+from views_sds import render_sds_upload_panel
 
 
 def render_engineering_module(profile, menu_styles: dict):
     eng_tab = option_menu(
         menu_title=None,
-        options=["Termodinâmica", "Inertização (NFPA 69)", "Emergências (PSV/Runaway)"],
-        icons=["thermometer", "cone-striped", "speedometer2"],
+        options=["Leitor SDS/FISPQ", "Termodinâmica", "Inertização (NFPA 69)", "Emergências (PSV/Runaway)"],
+        icons=["file-earmark-text", "thermometer", "cone-striped", "speedometer2"],
         default_index=0,
         orientation="horizontal",
         styles=menu_styles,
     )
 
-    if eng_tab == "Termodinâmica":
+    if eng_tab == "Leitor SDS/FISPQ":
+        render_sds_upload_panel(profile)
+
+    elif eng_tab == "Termodinâmica":
         render_hero_panel(
             title="Base de Propriedades e Comportamento do Ativo",
             subtitle="Leitura rápida do composto com foco em risco de processo, propriedades-chave e suporte a decisões de projeto e operação.",
