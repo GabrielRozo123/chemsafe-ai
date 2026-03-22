@@ -13,8 +13,18 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-import fitz  # pymupdf — já no requirements.txt
 import pandas as pd
+
+# pymupdf é importado de forma lazy para não quebrar o app inteiro
+# caso o pacote não esteja disponível (ex: Python 3.14 no Streamlit Cloud)
+fitz = None
+try:
+    import fitz  # pymupdf
+except ImportError:
+    try:
+        import pymupdf as fitz  # nome alternativo em versões recentes
+    except ImportError:
+        fitz = None
 
 from compound_profile import CompoundProfile, PropertyValue
 from sds_prompts import (
@@ -34,6 +44,11 @@ def extract_text_from_sds_pdf(file_bytes: bytes, max_pages: int = 20) -> str:
     Retorna o texto concatenado das primeiras ``max_pages`` páginas,
     com separador por página para contexto do LLM.
     """
+    if fitz is None:
+        raise RuntimeError(
+            "pymupdf (fitz) não está disponível neste ambiente. "
+            "Adicione 'pymupdf' ao requirements.txt ou use Python <= 3.13."
+        )
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     pages: List[str] = []
     for idx, page in enumerate(doc):
