@@ -1208,6 +1208,30 @@ if "bowtie_mit" not in st.session_state:
     st.session_state.bowtie_mit = ""
 if "bowtie_cons" not in st.session_state:
     st.session_state.bowtie_cons = ""
+if "case_reviewer" not in st.session_state:
+    st.session_state.case_reviewer = ""
+if "case_date" not in st.session_state:
+    st.session_state.case_date = ""
+if "case_status" not in st.session_state:
+    st.session_state.case_status = "Em Análise"
+if "case_priority" not in st.session_state:
+    st.session_state.case_priority = "Normal"
+if "case_notes" not in st.session_state:
+    st.session_state.case_notes = ""
+if "selected_equipment" not in st.session_state:
+    st.session_state.selected_equipment = []
+if "hazop_scenarios" not in st.session_state:
+    st.session_state.hazop_scenarios = []
+if "lopa_scenarios" not in st.session_state:
+    st.session_state.lopa_scenarios = []
+if "bowtie_data" not in st.session_state:
+    st.session_state.bowtie_data = {}
+if "action_plan" not in st.session_state:
+    st.session_state.action_plan = []
+if "risk_matrix" not in st.session_state:
+    st.session_state.risk_matrix = None
+if "compound_cache" not in st.session_state:
+    st.session_state.compound_cache = {}
 
 
 # ==============================================================================
