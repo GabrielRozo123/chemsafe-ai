@@ -31,6 +31,7 @@ from compound_engine import build_compound_profile
 from psi_readiness import build_psi_readiness_df, summarize_psi_readiness
 from action_hub import build_consolidated_action_plan
 from dashboard_engine import calculate_case_readiness_index
+from traceability_engine import build_traceability_matrix
 from i18n import t
 
 
@@ -1232,6 +1233,28 @@ if "risk_matrix" not in st.session_state:
     st.session_state.risk_matrix = None
 if "compound_cache" not in st.session_state:
     st.session_state.compound_cache = {}
+if "case_decision_gate" not in st.session_state:
+    st.session_state.case_decision_gate = None
+if "case_gate_history" not in st.session_state:
+    st.session_state.case_gate_history = []
+if "executive_summary" not in st.session_state:
+    st.session_state.executive_summary = ""
+if "recommendations" not in st.session_state:
+    st.session_state.recommendations = []
+if "risk_assessment" not in st.session_state:
+    st.session_state.risk_assessment = {}
+if "mitigation_plan" not in st.session_state:
+    st.session_state.mitigation_plan = []
+if "compliance_status" not in st.session_state:
+    st.session_state.compliance_status = {}
+if "audit_findings" not in st.session_state:
+    st.session_state.audit_findings = []
+if "document_history" not in st.session_state:
+    st.session_state.document_history = []
+if "case_status_note" not in st.session_state:
+    st.session_state.case_status_note = ""
+if "review_history" not in st.session_state:
+    st.session_state.review_history = []
 
 
 # ==============================================================================
@@ -1337,13 +1360,26 @@ if st.session_state.audit_mode:
 # DADOS GLOBAIS (usados pelos módulos)
 # ==============================================================================
 psi_df_dash = build_psi_readiness_df(profile, st.session_state.get("lopa_result"), bowtie_payload())
+psi_summary = summarize_psi_readiness(psi_df_dash)
+
 cri_data = calculate_case_readiness_index(
     profile,
-    summarize_psi_readiness(psi_df_dash),
+    psi_summary,
     st.session_state.get("moc_result"),
     st.session_state.get("pssr_result"),
     st.session_state.get("lopa_result"),
     st.session_state.get("reactivity_result"),
+)
+
+traceability_df = build_traceability_matrix(
+    profile=profile,
+    psi_df=psi_df_dash,
+    psi_summary=psi_summary,
+    cri_data=cri_data,
+    lopa_result=st.session_state.get("lopa_result"),
+    moc_result=st.session_state.get("moc_result"),
+    pssr_result=st.session_state.get("pssr_result"),
+    reactivity_result=st.session_state.get("reactivity_result"),
 )
 
 action_df_dash = enrich_action_plan_df(
@@ -1382,6 +1418,9 @@ if selected_module == "Visão Executiva":
         render_action_donut_fn=render_action_donut,
         render_action_bar_fn=render_action_bar,
         get_action_col_fn=get_action_col,
+        psi_df_dash=psi_df_dash,
+        psi_summary=psi_summary,
+        traceability_df=traceability_df,
     )
 
 elif selected_module == "Engenharia":
