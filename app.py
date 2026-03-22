@@ -43,6 +43,28 @@ from views_knowledge import render_knowledge_module
 from views_risk import render_risk_module
 from action_hub import build_consolidated_action_plan
 
+
+st.set_page_config(
+    page_title="ChemSafe Pro Enterprise",
+    page_icon="⚗️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+st.markdown(APP_CSS, unsafe_allow_html=True)
+initialize_session_state()
+
+st.session_state.setdefault("case_owner", "")
+st.session_state.setdefault("case_reviewer", "")
+st.session_state.setdefault("case_status", "rascunho")
+st.session_state.setdefault("case_status_note", "")
+st.session_state.setdefault("case_decision_gate", "")
+st.session_state.setdefault("review_history", [])
+st.session_state.setdefault("traceability_rows", [])
+st.session_state.setdefault("psi_summary", None)
+st.session_state.setdefault("report_bundle", None)
+
+
+
 APP_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
