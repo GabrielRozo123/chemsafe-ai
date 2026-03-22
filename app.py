@@ -179,6 +179,15 @@ st.set_page_config(
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
 initialize_session_state()
+st.session_state.setdefault("case_owner", "")
+st.session_state.setdefault("case_reviewer", "")
+st.session_state.setdefault("case_status", "rascunho")
+st.session_state.setdefault("case_status_note", "")
+st.session_state.setdefault("case_decision_gate", "")
+st.session_state.setdefault("review_history", [])
+st.session_state.setdefault("traceability_rows", [])
+st.session_state.setdefault("psi_summary", None)
+st.session_state.setdefault("report_bundle", None)
 
 with st.sidebar:
     lang = st.radio("🌐 Idioma", ["pt", "en"], horizontal=True, label_visibility="collapsed")
