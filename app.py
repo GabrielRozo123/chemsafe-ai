@@ -1188,6 +1188,26 @@ if "tmr_result" not in st.session_state:
     st.session_state.tmr_result = None
 if "tmr_inputs" not in st.session_state:
     st.session_state.tmr_inputs = None
+if "case_owner" not in st.session_state:
+    st.session_state.case_owner = ""
+if "moc_result" not in st.session_state:
+    st.session_state.moc_result = None
+if "pssr_result" not in st.session_state:
+    st.session_state.pssr_result = None
+if "reactivity_result" not in st.session_state:
+    st.session_state.reactivity_result = None
+if "report_bundle" not in st.session_state:
+    st.session_state.report_bundle = None
+if "bowtie_threats" not in st.session_state:
+    st.session_state.bowtie_threats = ""
+if "bowtie_pre" not in st.session_state:
+    st.session_state.bowtie_pre = ""
+if "bowtie_top" not in st.session_state:
+    st.session_state.bowtie_top = "Perda de contenção"
+if "bowtie_mit" not in st.session_state:
+    st.session_state.bowtie_mit = ""
+if "bowtie_cons" not in st.session_state:
+    st.session_state.bowtie_cons = ""
 
 
 # ==============================================================================
